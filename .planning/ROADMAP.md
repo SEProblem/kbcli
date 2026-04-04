@@ -11,7 +11,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 
 ## Phases
 
-- [ ] **Phase 1: Core Kanban Foundation** — Working 3-column board with basic CRUD and persistence
+- [x] **Phase 1: Core Kanban Foundation** — Working 3-column board with basic CRUD and persistence (completed 2026-04-04)
 - [ ] **Phase 2: Input Handling & Modal Editing** — Vim navigation, mouse support, resize handling
 - [ ] **Phase 3: Task Details & Data Safety** — Descriptions, checklists, atomic file operations
 - [ ] **Phase 4: Multi-Board & Configuration** — Multiple boards, settings, customization
@@ -40,7 +40,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 **Plan list:**
 - [x] 01-01-PLAN.md — Data models and storage layer
 - [x] 01-02-PLAN.md — Board rendering and task CRUD
-- [ ] 01-03-PLAN.md — Task movement and final integration
+- [x] 01-03-PLAN.md — Task movement and final integration
 
 ### Phase 2: Input Handling & Modal Editing
 **Goal**: Users can navigate efficiently using vim keys and mouse with modal editing for text input
@@ -106,7 +106,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Kanban Foundation | 2/3 | In Progress|  |
+| 1. Core Kanban Foundation | 3/3 | Complete    | 2026-04-04 |
 | 2. Input Handling & Modal Editing | 0/3 | Not started | - |
 | 3. Task Details & Data Safety | 0/2 | Not started | - |
 | 4. Multi-Board & Configuration | 0/2 | Not started | - |
