@@ -25,6 +25,12 @@ static time_t last_g_press_time = 0;
 /* External board filename for auto-save */
 extern char global_board_filename[512];
 
+/* Forward declarations for mouse handling - NAV-05, NAV-06 */
+void handle_mouse_event(Board *board, Selection *selection);
+void navigation_select_task_at(Board *board, Selection *selection, int screen_y, int screen_x);
+void navigation_scroll_up(Selection *selection);
+void navigation_scroll_down(Selection *selection, Board *board);
+
 const char* input_get_error(void) {
     if (input_error[0] == '\0') {
         return NULL;
@@ -151,6 +157,27 @@ void enter_insert_mode(Board *board) {
 void exit_insert_mode(Board *board) {
     if (board == NULL) return;
     board->app_mode = MODE_NORMAL;
+}
+
+/**
+ * Handle terminal resize event using soft resize
+ * Per D-10, D-11: uses resizeterm() not full reinitialization
+ */
+void handle_resize(Board *board) {
+    if (board == NULL) return;
+    
+    /* Get new terminal dimensions */
+    int new_lines = LINES;
+    int new_cols = COLS;
+    
+    /* Use soft resize - resizeterm updates without full reinit */
+    resizeterm(new_lines, new_cols);
+    
+    /* Recalculate all window positions */
+    renderer_calculate_layout(new_lines, new_cols);
+    
+    /* Redraw everything */
+    renderer_redraw_all();
 }
 
 int handle_input(Board *board, int key, Selection *selection) {
@@ -390,9 +417,15 @@ int handle_input(Board *board, int key, Selection *selection) {
             return 1;  /* Signal quit */
         }
         
-        /* Handle resize */
+        /* Mouse event handling - NAV-05, NAV-06 */
+        case KEY_MOUSE: {
+            handle_mouse_event(board, selection);
+            break;
+        }
+        
+        /* Handle resize - soft resize with resizeterm */
         case KEY_RESIZE: {
-            /* Will be handled by redraw in main loop */
+            handle_resize(board);
             break;
         }
         
@@ -427,4 +460,105 @@ int handle_input(Board *board, int key, Selection *selection) {
 
 int wait_for_key(void) {
     return getch();
+}
+
+/**
+ * Handle mouse events - NAV-05, NAV-06
+ * Processes mouse clicks and scroll wheel events
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection state
+ */
+void handle_mouse_event(Board *board, Selection *selection) {
+    MEVENT event;
+    
+    if (getmouse(&event) == OK) {
+        /* Handle button 1 press - click to select task */
+        if (event.bstate & BUTTON1_PRESSED || 
+            event.bstate & BUTTON1_CLICKED) {
+            /* Navigate to task at clicked position */
+            navigation_select_task_at(board, selection, event.y, event.x);
+        }
+        
+        /* Handle scroll wheel up - NAV-06 */
+        if (event.bstate & BUTTON4_PRESSED) {
+            navigation_scroll_up(selection);
+        }
+        
+        /* Handle scroll wheel down - NAV-06 */
+        if (event.bstate & BUTTON5_PRESSED) {
+            navigation_scroll_down(selection, board);
+        }
+    }
+}
+
+/**
+ * Navigate to task at mouse coordinates - NAV-05
+ * Maps screen coordinates to task selection
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection state
+ * @param screen_y Screen row coordinate
+ * @param screen_x Screen column coordinate
+ */
+void navigation_select_task_at(Board *board, Selection *selection, int screen_y, int screen_x) {
+    if (board == NULL || selection == NULL) return;
+    
+    /* Calculate which column was clicked */
+    int col_width = COLS / 3;
+    int col = screen_x / col_width;
+    if (col > 2) col = 2;
+    if (col < 0) col = 0;
+    
+    /* Get the column */
+    Column *column = &board->columns[col];
+    
+    /* Calculate which task in the column based on screen position */
+    int header_height = 2;  /* Column header rows */
+    int task_idx = (screen_y - header_height);
+    
+    /* Clamp to valid range */
+    if (task_idx < 0) task_idx = 0;
+    if (task_idx >= column->task_count) task_idx = column->task_count - 1;
+    if (column->task_count == 0) task_idx = 0;
+    
+    /* Update selection */
+    selection->column_index = col;
+    selection->task_index = task_idx;
+}
+
+/**
+ * Scroll up within current column - NAV-06
+ * Moves selection up by 3 tasks
+ * 
+ * @param selection Pointer to current selection state
+ */
+void navigation_scroll_up(Selection *selection) {
+    if (selection == NULL) return;
+    
+    /* Move up by 3 tasks per NAV-06 */
+    selection->task_index -= 3;
+    if (selection->task_index < 0) {
+        selection->task_index = 0;
+    }
+}
+
+/**
+ * Scroll down within current column - NAV-06
+ * Moves selection down by 3 tasks
+ * 
+ * @param selection Pointer to current selection state
+ * @param board Pointer to the board (for task count)
+ */
+void navigation_scroll_down(Selection *selection, Board *board) {
+    if (selection == NULL || board == NULL) return;
+    
+    Column *col = &board->columns[selection->column_index];
+    int max_index = (col->task_count > 0) ? col->task_count - 1 : 0;
+    
+    /* Move down by 3 tasks per NAV-06 */
+    selection->task_index += 3;
+    if (selection->task_index > max_index) {
+        selection->task_index = max_index;
+    }
 }
