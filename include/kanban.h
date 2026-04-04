@@ -11,14 +11,30 @@
 #include <stddef.h>
 #include <time.h>
 
+/* Maximum description length per TSK-01 */
+#define MAX_DESC_LEN 500
+
 /**
  * Mode enumeration for vim-style modal editing
  * MOD-01, MOD-02 per requirements
  */
 typedef enum {
     MODE_NORMAL = 0,
-    MODE_INSERT
+    MODE_INSERT,
+    MODE_DESCRIPTION_VIEW,
+    MODE_DESCRIPTION_EDIT,
+    MODE_CHECKLIST
 } AppMode;
+
+/**
+ * ChecklistItem structure for task subtasks
+ * Uses linked list for multiple checklist items per task
+ */
+typedef struct ChecklistItem {
+    char text[256];
+    int checked;                     /* 0 = unchecked, 1 = checked */
+    struct ChecklistItem *next;      /* Linked list for checklist items */
+} ChecklistItem;
 
 /**
  * Task structure with GitHub-style markdown syntax
@@ -27,6 +43,8 @@ typedef enum {
 typedef struct Task {
     char id[37];           /* UUID v4 */
     char title[256];       /* Task title */
+    char description[MAX_DESC_LEN];  /* Task description */
+    size_t desc_len;       /* Length of description */
     int completed;         /* 0 = unchecked, 1 = checked */
     struct Task *next;     /* Linked list for column tasks */
 } Task;

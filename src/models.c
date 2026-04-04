@@ -50,6 +50,10 @@ Task* task_create(const char *title) {
     strncpy(task->title, title, sizeof(task->title) - 1);
     task->title[sizeof(task->title) - 1] = '\0';
     
+    /* Initialize description fields */
+    task->description[0] = '\0';
+    task->desc_len = 0;
+    
     task->completed = 0;
     task->next = NULL;
     
