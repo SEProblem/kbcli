@@ -35,7 +35,12 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 7. User can quit gracefully with 'q' and terminal is restored to original state
 8. User can relaunch app and see previous board state restored from file
 
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
+
+**Plan list:**
+- [ ] 01-01-PLAN.md — Data models and storage layer
+- [ ] 01-02-PLAN.md — Board rendering and task CRUD
+- [ ] 01-03-PLAN.md — Task movement and final integration
 
 ### Phase 2: Input Handling & Modal Editing
 **Goal**: Users can navigate efficiently using vim keys and mouse with modal editing for text input
@@ -101,7 +106,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Kanban Foundation | 0/3 | Not started | - |
+| 1. Core Kanban Foundation | 0/3 | ✓ Planned | - |
 | 2. Input Handling & Modal Editing | 0/3 | Not started | - |
 | 3. Task Details & Data Safety | 0/2 | Not started | - |
 | 4. Multi-Board & Configuration | 0/2 | Not started | - |
