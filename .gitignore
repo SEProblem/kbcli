@@ -27,3 +27,7 @@ vendor/
 coverage/
 .cache/
 tmp/
+*.o
+*.a
+*.so
+*.dylib
