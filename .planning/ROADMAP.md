@@ -110,7 +110,11 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 7. User can customize keybindings via configuration file
 8. User can set default board directory path via configuration
 
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
+
+**Plan list:**
+- [x] 04-01-PLAN.md — Multi-board management (create, switch, list, delete)
+- [x] 04-02-PLAN.md — Configuration system (JSON config, keybindings, board directory)
 
 ## Progress
 
@@ -119,7 +123,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 | 1. Core Kanban Foundation | 3/3 | Complete    | 2026-04-04 |
 | 2. Input Handling & Modal Editing | 4/4 | Complete   | 2026-04-04 |
 | 3. Task Details & Data Safety | 2/2 | Complete   | 2026-04-04 |
-| 4. Multi-Board & Configuration | 0/2 | Not started | - |
+| 4. Multi-Board & Configuration | 2/2 | Planned | - |
 
 ## Requirement Coverage
 
