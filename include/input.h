@@ -53,4 +53,13 @@ const char* input_get_error(void);
  */
 void input_clear_error(void);
 
+/**
+ * Handle terminal resize event
+ * Uses soft resize (resizeterm) to update terminal dimensions
+ * then recalculates layout and redraws all windows
+ * 
+ * @param board Pointer to the board
+ */
+void handle_resize(Board *board);
+
 #endif /* INPUT_H */

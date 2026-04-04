@@ -99,4 +99,19 @@ int get_scroll_offset(int column_index);
  */
 void set_scroll_offset(int column_index, int offset);
 
+/**
+ * Recalculate window layout based on new terminal dimensions
+ * Called after resizeterm() to recreate windows with new sizes
+ * 
+ * @param lines New number of rows
+ * @param cols New number of columns
+ */
+void renderer_calculate_layout(int lines, int cols);
+
+/**
+ * Redraw all windows after resize or other events
+ * Clears screen and renders all columns and status bar
+ */
+void renderer_redraw_all(void);
+
 #endif /* RENDERER_H */

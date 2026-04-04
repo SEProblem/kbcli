@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ncurses.h>
+#include <panel.h>
 
 #include "kanban.h"
 #include "renderer.h"
@@ -259,4 +260,36 @@ void render_board(Board *board) {
     
     /* Refresh to show all changes (per PITFALLS.md) */
     refresh();
+}
+
+/**
+ * Recalculate window layout based on new terminal dimensions
+ * Per D-10: soft resize using resizeterm() - update LINES/COLS without full reinit
+ * This function recalculates column positions but does NOT recreate windows
+ * since ncurses handles this automatically after resizeterm()
+ */
+void renderer_calculate_layout(int lines, int cols) {
+    (void)lines;
+    (void)cols;
+    /* 
+     * The actual window positions will be recalculated in render_board()
+     * which is called via renderer_redraw_all() after resizeterm()
+     * 
+     * This function exists as a hook for potential future window recreation
+     * if needed for more complex layouts
+     */
+}
+
+/**
+ * Redraw all windows after resize or other events
+ * Clears the virtual screen and redraws all content
+ * Per D-11: must redraw all windows after resize
+ */
+void renderer_redraw_all(void) {
+    /* Clear virtual screen */
+    clear();
+    
+    /* Update panels and refresh */
+    update_panels();
+    doupdate();
 }

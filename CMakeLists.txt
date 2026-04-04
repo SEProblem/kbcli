@@ -22,8 +22,8 @@ set(SOURCES
 # Create executable
 add_executable(kanban-cli ${SOURCES})
 
-# Link ncursesw library
-target_link_libraries(kanban-cli ${CURSES_LIBRARIES})
+# Link ncursesw and panels library
+target_link_libraries(kanban-cli ${CURSES_LIBRARIES} panel)
 
 # Add compile options for warnings
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
