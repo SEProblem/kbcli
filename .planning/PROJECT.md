@@ -18,10 +18,10 @@ Users can manage their tasks efficiently without leaving the terminal, using fam
 - [x] Create task management (add, edit, delete, move between columns) (Phase 1)
 - [x] Design markdown-based storage format for persistence (Phase 1)
 - [x] Support both preset 3-column layout and empty custom boards (Phase 1)
+- [x] Implement task metadata - descriptions and checklists (Phase 3)
 
 ### Active
 
-- [ ] Implement task metadata (title, description, checklists/subtasks)
 - [ ] Support both preset 3-column layout and empty custom boards
 
 ### Out of Scope
@@ -87,4 +87,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Create, edit, move, and delete tasks via keyboard or mouse
 
 ---
-*Last updated: 2026-04-04 after Phase 2 complete*
+*Last updated: 2026-04-04 after Phase 3 complete*
