@@ -65,7 +65,7 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 - [x] **APP-01**: Application initializes ncurses TUI on launch
 - [x] **APP-02**: User can quit gracefully from Normal mode (q or :q)
 - [x] **APP-03**: Terminal is restored to original state on exit
-- [ ] **APP-04**: Application handles terminal resize events
+- [x] **APP-04**: Application handles terminal resize events
 - [ ] **APP-05**: Configuration file at ~/.config/kanban-cli/config
 - [ ] **APP-06**: User can customize keybindings via configuration
 - [ ] **APP-07**: User can set default board directory via configuration
@@ -136,7 +136,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MOD-03 | Phase 2 | Complete |
 | MOD-04 | Phase 2 | Complete |
 | MOD-05 | Phase 2 | Complete |
-| APP-04 | Phase 2 | Pending |
+| APP-04 | Phase 2 | Complete |
 | TSK-01 | Phase 3 | Pending |
 | TSK-02 | Phase 3 | Pending |
 | TSK-03 | Phase 3 | Pending |

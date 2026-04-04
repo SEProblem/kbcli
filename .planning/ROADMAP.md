@@ -113,7 +113,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Kanban Foundation | 3/3 | Complete    | 2026-04-04 |
-| 2. Input Handling & Modal Editing | 3/4 | In Progress|  |
+| 2. Input Handling & Modal Editing | 4/4 | Complete   | 2026-04-04 |
 | 3. Task Details & Data Safety | 0/2 | Not started | - |
 | 4. Multi-Board & Configuration | 0/2 | Not started | - |
 
