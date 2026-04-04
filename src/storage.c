@@ -95,6 +95,39 @@ static void parse_task_description(Task *task, const char *description_line) {
     }
 }
 
+/* Parse a checklist item line: "- [ ] text" or "- [x] text" */
+static ChecklistItem* parse_checklist_line(const char *line) {
+    if (line == NULL) return NULL;
+    
+    /* Look for "- [" pattern */
+    const char *bracket = strstr(line, "- [");
+    if (bracket == NULL) return NULL;
+    
+    /* Check if checked or unchecked */
+    int checked = 0;
+    if (strncmp(bracket, "- [x]", 5) == 0) {
+        checked = 1;
+    } else if (strncmp(bracket, "- [ ]", 5) != 0) {
+        return NULL;  /* Not a valid checklist line */
+    }
+    
+    /* Get checklist text after "- [ ] " or "- [x] " */
+    const char *text_start = bracket + 5;
+    while (*text_start == ' ') text_start++;
+    
+    if (*text_start == '\0') return NULL;
+    
+    trim_trailing((char*)text_start);
+    
+    /* Create checklist item */
+    ChecklistItem *item = checklist_item_create(text_start);
+    if (item != NULL) {
+        item->checked = checked;
+    }
+    
+    return item;
+}
+
 /**
  * Parse a markdown file and populate a Board structure
  */
@@ -126,6 +159,17 @@ int parse_markdown(Board *board, const char *filepath) {
             if (last_task != NULL && strncmp(line, "Description: ", 13) == 0) {
                 parse_task_description(last_task, line);
                 continue;
+            }
+            
+            /* Check for checklist item line (only after a task exists) */
+            if (last_task != NULL && strncmp(line, "- [", 4) == 0) {
+                ChecklistItem *item = parse_checklist_line(line);
+                if (item != NULL) {
+                    /* Add to beginning of checklist list */
+                    item->next = last_task->checklist;
+                    last_task->checklist = item;
+                    continue;
+                }
             }
             
             Task *task = parse_task_line(line);
@@ -190,6 +234,16 @@ int write_markdown(Board *board, const char *filepath) {
             /* Write description if present */
             if (task->description[0] != '\0') {
                 fprintf(fp, "Description: %s\n", task->description);
+            }
+            /* Write checklist items if present */
+            ChecklistItem *item = task->checklist;
+            while (item != NULL) {
+                if (item->checked) {
+                    fprintf(fp, "- [x] %s\n", item->text);
+                } else {
+                    fprintf(fp, "- [ ] %s\n", item->text);
+                }
+                item = item->next;
             }
             task = task->next;
         }

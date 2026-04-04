@@ -220,6 +220,80 @@ void exit_insert_mode(Board *board) {
 }
 
 /**
+ * Enter Checklist mode - allows navigating checklist items
+ * Activated when user presses 'c' in detailed view
+ */
+void enter_checklist_mode(Board *board) {
+    if (board == NULL) return;
+    board->app_mode = MODE_CHECKLIST;
+    board->checklist_index = 0;
+}
+
+/**
+ * Exit Checklist mode - returns to Normal mode
+ */
+void exit_checklist_mode(Board *board) {
+    if (board == NULL) return;
+    board->app_mode = MODE_NORMAL;
+    board->checklist_index = 0;
+}
+
+/**
+ * Read checklist item text from user
+ */
+int read_checklist_item(char *buffer, size_t size) {
+    if (buffer == NULL || size == 0) return -1;
+    
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    /* Clear input buffer */
+    buffer[0] = '\0';
+    
+    /* Create input prompt */
+    int prompt_y = height - 2;
+    int prompt_x = 0;
+    
+    /* Show prompt */
+    mvprintw(prompt_y, prompt_x, "Checklist item: ");
+    clrtoeol();
+    refresh();
+    
+    /* Move cursor to input position */
+    move(prompt_y, prompt_x + 17);
+    
+    /* Read input with bounds checking */
+    echo();
+    int ch;
+    size_t pos = 0;
+    
+    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
+        if (ch == 27) {  /* Escape to cancel */
+            buffer[0] = '\0';
+            noecho();
+            return -1;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127) {  /* Backspace */
+            if (pos > 0) {
+                pos--;
+                buffer[pos] = '\0';
+                delch();
+            }
+        } else if (ch >= 32 && ch <= 126 && pos < size - 1) {
+            buffer[pos++] = (char)ch;
+            buffer[pos] = '\0';
+        }
+    }
+    
+    noecho();
+    
+    /* Clear the input line */
+    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
+    
+    return (buffer[0] == '\0') ? -1 : 0;
+}
+
+/**
  * Handle terminal resize event using soft resize
  * Per D-10, D-11: uses resizeterm() not full reinitialization
  */
@@ -343,6 +417,105 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
+    /* MODE_CHECKLIST: navigate and manage checklist items */
+    if (board->app_mode == MODE_CHECKLIST) {
+        /* Get the selected task */
+        Column *col = &board->columns[selection->column_index];
+        Task *task = col->tasks;
+        int idx = selection->task_index;
+        while (task != NULL && idx > 0) {
+            task = task->next;
+            idx--;
+        }
+        
+        if (task == NULL) {
+            exit_checklist_mode(board);
+            return 0;
+        }
+        
+        /* Get checklist count */
+        int checklist_count_val = checklist_count(task);
+        
+        /* Esc exits checklist mode */
+        if (key == 27) {  /* Escape */
+            exit_checklist_mode(board);
+            return 0;
+        }
+        
+        /* Arrow keys navigate checklist items */
+        if (key == KEY_DOWN || key == 'j') {
+            if (board->checklist_index < checklist_count_val - 1) {
+                board->checklist_index++;
+            }
+            return 0;
+        }
+        
+        if (key == KEY_UP || key == 'k') {
+            if (board->checklist_index > 0) {
+                board->checklist_index--;
+            }
+            return 0;
+        }
+        
+        /* Space toggles checked state of current item */
+        if (key == ' ') {
+            ChecklistItem *item = task->checklist;
+            int item_idx = board->checklist_index;
+            while (item != NULL && item_idx > 0) {
+                item = item->next;
+                item_idx--;
+            }
+            
+            if (item != NULL) {
+                checklist_item_toggle(item);
+                /* Auto-save after toggling */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            return 0;
+        }
+        
+        /* 'N' (Shift+N) adds new checklist item */
+        if (key == 'N') {
+            char item_text[256] = {0};
+            if (read_checklist_item(item_text, sizeof(item_text)) == 0) {
+                checklist_item_add(task, item_text);
+                /* Auto-save after adding */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            return 0;
+        }
+        
+        /* 'd' (double tap dd) deletes current checklist item */
+        if (key == 'd') {
+            /* Get current checklist item */
+            ChecklistItem *item = task->checklist;
+            int item_idx = board->checklist_index;
+            while (item != NULL && item_idx > 0) {
+                item = item->next;
+                item_idx--;
+            }
+            
+            if (item != NULL) {
+                checklist_item_delete(task, item);
+                /* Adjust index if needed */
+                if (board->checklist_index >= checklist_count_val - 1) {
+                    board->checklist_index = 0;
+                }
+                /* Auto-save after deleting */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            return 0;
+        }
+        
+        return 0;
+    }
+    
     /* MODE_NORMAL: route keys for navigation and commands */
     
     /* 'i' - also open description popup (D-01) */
@@ -351,6 +524,19 @@ int handle_input(Board *board, int key, Selection *selection) {
         Column *col = &board->columns[selection->column_index];
         if (col->task_count > 0) {
             board->app_mode = MODE_DESCRIPTION_VIEW;
+        }
+        return 0;
+    }
+    
+    /* 'c' - enter checklist mode when in detailed view */
+    if (key == 'c') {
+        /* Only enter checklist mode if detailed view is enabled */
+        if (board->detailed_view) {
+            Column *col = &board->columns[selection->column_index];
+            if (col->task_count > 0) {
+                board->checklist_index = 0;
+                board->app_mode = MODE_CHECKLIST;
+            }
         }
         return 0;
     }

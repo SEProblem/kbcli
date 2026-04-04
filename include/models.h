@@ -134,8 +134,38 @@ int move_up(Board *board, Selection *selection);
  * 
  * @param board Pointer to the board
  * @param selection Pointer to current selection
- * @return 0 on success, -1 if at bottom
+ * @return 0 on success, -1 at bottom
  */
 int move_down(Board *board, Selection *selection);
+
+/**
+ * Create a new checklist item with the given text
+ */
+ChecklistItem* checklist_item_create(const char *text);
+
+/**
+ * Add a new checklist item to a task
+ */
+int checklist_item_add(Task *task, const char *text);
+
+/**
+ * Toggle the checked state of a checklist item
+ */
+void checklist_item_toggle(ChecklistItem *item);
+
+/**
+ * Delete a checklist item from a task
+ */
+int checklist_item_delete(Task *task, ChecklistItem *item);
+
+/**
+ * Free all checklist items for a task
+ */
+void checklist_free(Task *task);
+
+/**
+ * Get the count of checklist items
+ */
+int checklist_count(Task *task);
 
 #endif /* MODELS_H */

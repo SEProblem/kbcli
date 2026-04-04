@@ -45,6 +45,7 @@ typedef struct Task {
     char title[256];       /* Task title */
     char description[MAX_DESC_LEN];  /* Task description */
     size_t desc_len;       /* Length of description */
+    ChecklistItem *checklist;  /* Linked list of checklist items */
     int completed;         /* 0 = unchecked, 1 = checked */
     struct Task *next;     /* Linked list for column tasks */
 } Task;
@@ -66,6 +67,8 @@ typedef struct Board {
     char filename[512];    /* Markdown file path */
     time_t last_modified;  /* For change detection */
     AppMode app_mode;      /* Current mode (Normal/Insert) per MOD-01, MOD-02 */
+    int detailed_view;     /* Toggle between compact (0) and detailed (1) view */
+    int checklist_index;   /* Current position in checklist when in MODE_CHECKLIST */
 } Board;
 
 /* Column names for default 3-column layout */

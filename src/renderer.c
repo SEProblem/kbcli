@@ -74,7 +74,7 @@ void highlight_selected(int selected) {
     }
 }
 
-void render_task(Task *task, int y, int x, int width, int selected) {
+void render_task(Task *task, int y, int x, int width, int selected, int detailed_view) {
     if (task == NULL) return;
     
     /* Calculate available width for title */
@@ -113,10 +113,36 @@ void render_task(Task *task, int y, int x, int width, int selected) {
     if (selected) {
         attroff(A_REVERSE);
     }
+    
+    /* In detailed view, show description and checklist below task */
+    if (detailed_view) {
+        int desc_y = y + 1;
+        
+        /* Show description if present */
+        if (task->description[0] != '\0') {
+            mvprintw(desc_y, x + 2, "  %s", task->description);
+            desc_y++;
+        }
+        
+        /* Show checklist items */
+        ChecklistItem *item = task->checklist;
+        while (item != NULL) {
+            char check_display[264];
+            if (item->checked) {
+                snprintf(check_display, sizeof(check_display), "  ☑ %s", item->text);
+            } else {
+                snprintf(check_display, sizeof(check_display), "  ☐ %s", item->text);
+            }
+            mvprintw(desc_y, x, "%s", check_display);
+            desc_y++;
+            item = item->next;
+        }
+    }
 }
 
 void render_column(Column *col, int start_x, int width, 
-                   int selected_col, int sel_task_index, int scroll_offset) {
+                   int selected_col, int sel_task_index, int scroll_offset,
+                   int detailed_view) {
     if (col == NULL) return;
     
     int height, max_y;
@@ -153,7 +179,22 @@ void render_column(Column *col, int start_x, int width,
         int is_selected = (selected_col == 1 && sel_task_index == visible_index);
         
         /* Render task */
-        render_task(task, task_y, start_x + 2, width - 4, is_selected);
+        render_task(task, task_y, start_x + 2, width - 4, is_selected, detailed_view);
+        
+        /* In detailed view, count lines for description + checklist */
+        if (detailed_view) {
+            task_y++;
+            /* Add line for description if present */
+            if (task->description[0] != '\0') {
+                task_y++;
+            }
+            /* Add lines for each checklist item */
+            ChecklistItem *item = task->checklist;
+            while (item != NULL) {
+                task_y++;
+                item = item->next;
+            }
+        }
         
         task = task->next;
         task_y++;
@@ -205,7 +246,8 @@ void render_board(Board *board) {
         render_column(&board->columns[i], col_start, col_width,
                       is_this_column_selected, 
                       is_this_column_selected ? global_selection.task_index : -1,
-                      scroll_offsets[i]);
+                      scroll_offsets[i],
+                      board->detailed_view);
     }
     
     /* Draw status bar at bottom */

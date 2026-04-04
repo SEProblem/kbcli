@@ -54,10 +54,116 @@ Task* task_create(const char *title) {
     task->description[0] = '\0';
     task->desc_len = 0;
     
+    /* Initialize checklist */
+    task->checklist = NULL;
+    
     task->completed = 0;
     task->next = NULL;
     
     return task;
+}
+
+/**
+ * Create a new checklist item with the given text
+ */
+ChecklistItem* checklist_item_create(const char *text) {
+    if (text == NULL) return NULL;
+    
+    ChecklistItem *item = (ChecklistItem*)malloc(sizeof(ChecklistItem));
+    if (item == NULL) return NULL;
+    
+    /* Copy text with bounds checking */
+    strncpy(item->text, text, sizeof(item->text) - 1);
+    item->text[sizeof(item->text) - 1] = '\0';
+    
+    item->checked = 0;
+    item->next = NULL;
+    
+    return item;
+}
+
+/**
+ * Add a new checklist item to a task
+ */
+int checklist_item_add(Task *task, const char *text) {
+    if (task == NULL || text == NULL) return -1;
+    
+    ChecklistItem *new_item = checklist_item_create(text);
+    if (new_item == NULL) return -1;
+    
+    /* Add to beginning of list */
+    new_item->next = task->checklist;
+    task->checklist = new_item;
+    
+    return 0;
+}
+
+/**
+ * Toggle the checked state of a checklist item
+ */
+void checklist_item_toggle(ChecklistItem *item) {
+    if (item == NULL) return;
+    item->checked = !item->checked;
+}
+
+/**
+ * Delete a checklist item from a task
+ */
+int checklist_item_delete(Task *task, ChecklistItem *item) {
+    if (task == NULL || item == NULL) return -1;
+    
+    /* Handle item at head of list */
+    if (task->checklist == item) {
+        task->checklist = item->next;
+        free(item);
+        return 0;
+    }
+    
+    /* Find and remove item from list */
+    ChecklistItem *current = task->checklist;
+    while (current != NULL && current->next != item) {
+        current = current->next;
+    }
+    
+    if (current != NULL && current->next == item) {
+        current->next = item->next;
+        free(item);
+        return 0;
+    }
+    
+    return -1;  /* Not found */
+}
+
+/**
+ * Free all checklist items for a task
+ */
+void checklist_free(Task *task) {
+    if (task == NULL) return;
+    
+    ChecklistItem *current = task->checklist;
+    while (current != NULL) {
+        ChecklistItem *next = current->next;
+        free(current);
+        current = next;
+    }
+    
+    task->checklist = NULL;
+}
+
+/**
+ * Get the count of checklist items
+ */
+int checklist_count(Task *task) {
+    if (task == NULL) return 0;
+    
+    int count = 0;
+    ChecklistItem *current = task->checklist;
+    while (current != NULL) {
+        count++;
+        current = current->next;
+    }
+    
+    return count;
 }
 
 /**
@@ -78,6 +184,8 @@ int task_delete(Task **head, const char *task_id) {
             } else {
                 prev->next = current->next;
             }
+            /* Free checklist before freeing task */
+            checklist_free(current);
             free(current);
             return 0;
         }
@@ -216,6 +324,8 @@ void board_init(Board *board) {
     board->filename[0] = '\0';
     board->last_modified = 0;
     board->app_mode = MODE_NORMAL;  /* Default to Normal mode per MOD-01 */
+    board->detailed_view = 0;       /* Default to compact view */
+    board->checklist_index = 0;     /* Reset checklist position */
 }
 
 /**
