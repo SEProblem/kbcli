@@ -9,6 +9,7 @@
 #define STORAGE_H
 
 #include "kanban.h"
+#include <dirent.h>
 
 /**
  * Parse a markdown file and populate a Board structure
@@ -65,5 +66,60 @@ int board_save(Board *board, const char *filepath);
  * @return 0 on success, -1 on error
  */
 int get_default_board_path(char *buffer, size_t size);
+
+/**
+ * Get the boards directory path
+ * Returns ~/.config/kanban-cli/boards/ or from config if available
+ * 
+ * @param buffer Buffer to store path
+ * @param size Buffer size
+ * @return 0 on success, -1 on error
+ */
+int get_boards_directory(char *buffer, size_t size);
+
+/**
+ * List all available boards in the boards directory
+ * Returns array of board names (without .md extension)
+ * Caller must free the returned array and each board name
+ * 
+ * @param boards Pointer to array that receives board names
+ * @param count Pointer to integer that receives board count
+ * @return 0 on success, -1 on error
+ */
+int board_list_boards(char ***boards, int *count);
+
+/**
+ * Free board list allocated by board_list_boards
+ * 
+ * @param boards Board array to free
+ * @param count Number of boards in array
+ */
+void board_list_free(char **boards, int count);
+
+/**
+ * Create a new board file with 3-column template
+ * Creates board at ~/.config/kanban-cli/boards/<name>.md
+ * 
+ * @param name Board name (without .md extension)
+ * @return 0 on success, -1 on error
+ */
+int board_create(const char *name);
+
+/**
+ * Delete a board file
+ * Deletes board at ~/.config/kanban-cli/boards/<name>.md
+ * 
+ * @param name Board name (without .md extension)
+ * @return 0 on success, -1 on error
+ */
+int board_delete(const char *name);
+
+/**
+ * Check if a board file exists
+ * 
+ * @param name Board name (without .md extension)
+ * @return 1 if exists, 0 if not
+ */
+int board_exists(const char *name);
 
 #endif /* STORAGE_H */

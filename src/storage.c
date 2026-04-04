@@ -337,3 +337,243 @@ int get_default_board_path(char *buffer, size_t size) {
     snprintf(buffer, size, "%s/.config/kanban-cli/boards/default.md", home);
     return 0;
 }
+
+/**
+ * Get the boards directory path
+ * Returns ~/.config/kanban-cli/boards/ or from config if available
+ */
+int get_boards_directory(char *buffer, size_t size) {
+    if (buffer == NULL || size == 0) return -1;
+    
+    const char *home = getenv("HOME");
+    if (home == NULL) {
+        return -1;
+    }
+    
+    snprintf(buffer, size, "%s/.config/kanban-cli/boards/", home);
+    return 0;
+}
+
+/**
+ * List all available boards in the boards directory
+ * Returns array of board names (without .md extension)
+ * Caller must free the returned array and each board name
+ * 
+ * @param boards Pointer to array that receives board names
+ * @param count Pointer to integer that receives board count
+ * @return 0 on success, -1 on error
+ */
+int board_list_boards(char ***boards, int *count) {
+    if (boards == NULL || count == NULL) return -1;
+    
+    *boards = NULL;
+    *count = 0;
+    
+    /* Get boards directory */
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
+        return -1;
+    }
+    
+    /* Open directory */
+    DIR *dir = opendir(dir_path);
+    if (dir == NULL) {
+        /* Directory might not exist yet - return empty list */
+        return 0;
+    }
+    
+    /* First pass: count .md files */
+    struct dirent *entry;
+    int md_count = 0;
+    
+    while ((entry = readdir(dir)) != NULL) {
+        /* Check for .md extension */
+        size_t name_len = strlen(entry->d_name);
+        if (name_len > 3) {
+            if (strcmp(entry->d_name + name_len - 3, ".md") == 0) {
+                md_count++;
+            }
+        }
+    }
+    
+    /* Allocate array */
+    if (md_count > 0) {
+        *boards = (char**)malloc(sizeof(char*) * md_count);
+        if (*boards == NULL) {
+            closedir(dir);
+            return -1;
+        }
+        
+        /* Initialize all pointers to NULL for cleanup on error */
+        for (int i = 0; i < md_count; i++) {
+            (*boards)[i] = NULL;
+        }
+    }
+    
+    /* Second pass: collect board names */
+    rewinddir(dir);
+    int idx = 0;
+    
+    while ((entry = readdir(dir)) != NULL) {
+        /* Check for .md extension */
+        size_t name_len = strlen(entry->d_name);
+        if (name_len > 3) {
+            if (strcmp(entry->d_name + name_len - 3, ".md") == 0) {
+                /* Copy name without .md extension */
+                size_t base_len = name_len - 3;  /* Remove .md */
+                (*boards)[idx] = (char*)malloc(base_len + 1);
+                if ((*boards)[idx] != NULL) {
+                    memcpy((*boards)[idx], entry->d_name, base_len);
+                    (*boards)[idx][base_len] = '\0';
+                    idx++;
+                }
+            }
+        }
+    }
+    
+    closedir(dir);
+    *count = idx;
+    
+    return 0;
+}
+
+/**
+ * Free board list allocated by board_list_boards
+ */
+void board_list_free(char **boards, int count) {
+    if (boards == NULL) return;
+    
+    for (int i = 0; i < count; i++) {
+        if (boards[i] != NULL) {
+            free(boards[i]);
+        }
+    }
+    free(boards);
+}
+
+/**
+ * Create a new board file with 3-column template
+ * Creates board at ~/.config/kanban-cli/boards/<name>.md
+ * 
+ * @param name Board name (without .md extension)
+ * @return 0 on success, -1 on error
+ */
+int board_create(const char *name) {
+    if (name == NULL || name[0] == '\0') return -1;
+    
+    /* Get boards directory */
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
+        return -1;
+    }
+    
+    /* Create directory if needed */
+    struct stat st;
+    if (stat(dir_path, &st) != 0) {
+        if (mkdir(dir_path, 0755) != 0) {
+            return -1;
+        }
+    }
+    
+    /* Build full file path */
+    char file_path[512];
+    snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, name);
+    
+    /* Check if already exists */
+    if (stat(file_path, &st) == 0) {
+        /* Board already exists */
+        return -1;
+    }
+    
+    /* Create board with 3-column template using atomic write */
+    char tmpfile[512];
+    snprintf(tmpfile, sizeof(tmpfile), "%s.XXXXXX", file_path);
+    
+    int fd = mkstemp(tmpfile);
+    if (fd < 0) {
+        return -1;
+    }
+    
+    FILE *fp = fdopen(fd, "w");
+    if (fp == NULL) {
+        close(fd);
+        unlink(tmpfile);
+        return -1;
+    }
+    
+    /* Write 3-column template */
+    fprintf(fp, "## To Do\n");
+    fprintf(fp, "\n");
+    fprintf(fp, "## In Progress\n");
+    fprintf(fp, "\n");
+    fprintf(fp, "## Done\n");
+    
+    /* Flush and sync */
+    fflush(fp);
+    fsync(fd);
+    fclose(fp);
+    
+    /* Atomic rename */
+    if (rename(tmpfile, file_path) < 0) {
+        unlink(tmpfile);
+        return -1;
+    }
+    
+    return 0;
+}
+
+/**
+ * Delete a board file
+ * Deletes board at ~/.config/kanban-cli/boards/<name>.md
+ * 
+ * @param name Board name (without .md extension)
+ * @return 0 on success, -1 on error
+ */
+int board_delete(const char *name) {
+    if (name == NULL || name[0] == '\0') return -1;
+    
+    /* Get boards directory */
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
+        return -1;
+    }
+    
+    /* Build full file path */
+    char file_path[512];
+    snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, name);
+    
+    /* Delete the file */
+    if (unlink(file_path) != 0) {
+        return -1;
+    }
+    
+    return 0;
+}
+
+/**
+ * Check if a board file exists
+ * 
+ * @param name Board name (without .md extension)
+ * @return 1 if exists, 0 if not
+ */
+int board_exists(const char *name) {
+    if (name == NULL || name[0] == '\0') return 0;
+    
+    /* Get boards directory */
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
+        return 0;
+    }
+    
+    /* Build full file path */
+    char file_path[512];
+    snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, name);
+    
+    /* Check if file exists */
+    struct stat st;
+    if (stat(file_path, &st) == 0) {
+        return 1;
+    }
+    
+    return 0;
+}
