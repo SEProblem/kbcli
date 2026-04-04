@@ -135,8 +135,60 @@ int read_task_title(char *buffer, size_t size) {
     return (buffer[0] == '\0') ? -1 : 0;
 }
 
+/**
+ * Enter Insert mode - allows text editing
+ * MOD-03: User can enter Insert mode to edit task title
+ */
+void enter_insert_mode(Board *board) {
+    if (board == NULL) return;
+    board->app_mode = MODE_INSERT;
+}
+
+/**
+ * Exit Insert mode - returns to Normal mode for navigation
+ * MOD-04: User can exit Insert mode back to Normal mode (Esc)
+ */
+void exit_insert_mode(Board *board) {
+    if (board == NULL) return;
+    board->app_mode = MODE_NORMAL;
+}
+
 int handle_input(Board *board, int key, Selection *selection) {
     if (board == NULL || selection == NULL) return 0;
+    
+    /* Check current mode and route accordingly */
+    if (board->app_mode == MODE_INSERT) {
+        /* Insert mode: Escape returns to Normal mode */
+        if (key == 27) {  /* Escape */
+            exit_insert_mode(board);
+            return 0;
+        }
+        /* In Insert mode, Enter returns to Normal mode */
+        if (key == '\n' || key == KEY_ENTER) {
+            exit_insert_mode(board);
+            return 0;
+        }
+        /* Arrow keys could move cursor in text editing mode */
+        if (key == KEY_UP || key == KEY_DOWN || key == KEY_LEFT || key == KEY_RIGHT) {
+            return 0;
+        }
+        /* Pass through other keys for potential text input */
+        return 0;
+    }
+    
+    /* MODE_NORMAL: route keys for navigation and commands */
+    
+    /* 'i' - enter Insert mode (MOD-03) */
+    if (key == 'i') {
+        enter_insert_mode(board);
+        return 0;
+    }
+    
+    /* Enter key - enter Insert mode (MOD-03 alternative) */
+    if (key == KEY_ENTER) {
+        enter_insert_mode(board);
+        return 0;
+    }
     
     Column *col = &board->columns[selection->column_index];
     int task_count = col->task_count;
