@@ -15,6 +15,8 @@ set(SOURCES
     src/main.c
     src/models.c
     src/storage.c
+    src/renderer.c
+    src/input.c
 )
 
 # Create executable

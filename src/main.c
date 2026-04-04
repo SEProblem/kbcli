@@ -2,19 +2,26 @@
  * main.c - Application entry point for Kanban CLI
  * 
  * Initializes ncurses TUI and loads/displays the kanban board.
+ * Integrates renderer and input modules for full functionality.
  */
 
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 #include <ncurses.h>
 
 #include "kanban.h"
 #include "models.h"
 #include "storage.h"
+#include "renderer.h"
+#include "input.h"
 
 /* Global board instance */
 static Board global_board;
+
+/* Global selection state - tracks current task selection */
+static Selection current_selection = {0, 0};
 
 /* Signal handler for graceful exit */
 static void handle_signal(int sig) {
@@ -27,56 +34,26 @@ static void cleanup(void) {
     endwin();
 }
 
-/* Draw a simple board placeholder */
-static void draw_board(void) {
-    int height, width;
-    getmaxyx(stdscr, height, width);
+/* Main event loop integrating renderer and input */
+static void event_loop(void) {
+    int running = 1;
     
-    /* Draw column headers */
-    int col_width = width / 3;
-    
-    for (int i = 0; i < 3; i++) {
-        int x = i * col_width;
+    while (running) {
+        /* Render the board (shows current state) */
+        render_board(&global_board);
         
-        /* Draw column box */
-        box(stdscr, 0, 0);
+        /* Get user input */
+        int key = getch();
         
-        /* Draw column name */
-        mvprintw(2, x + 2, "%s", global_board.columns[i].name);
-        
-        /* Draw tasks */
-        Task *task = global_board.columns[i].tasks;
-        int y = 4;
-        
-        while (task != NULL) {
-            mvprintw(y, x + 2, "- [%c] %s", 
-                     task->completed ? 'x' : ' ',
-                     task->title);
-            task = task->next;
-            y++;
-        }
-    }
-    
-    /* Draw status bar at bottom */
-    mvhline(height - 2, 0, 0, width);
-    mvprintw(height - 1, 0, "Press 'q' to quit");
-    
-    refresh();
-}
-
-/* Main input loop - placeholder for phase 2 */
-static void input_loop(void) {
-    int ch;
-    
-    while ((ch = getch()) != 'q') {
-        /* Placeholder: just refresh */
-        draw_board();
+        /* Handle input - returns 1 if quit requested */
+        running = !handle_input(&global_board, key, &current_selection);
     }
 }
 
 int main(int argc, char *argv[]) {
     (void)argc;  /* Unused */
     (void)argv;  /* Unused */
+    
     /* Seed random for UUID generation */
     srand(time(NULL));
     
@@ -94,6 +71,9 @@ int main(int argc, char *argv[]) {
     /* Reduce escape key delay for vim feel */
     set_escdelay(25);
     
+    /* Initialize renderer state */
+    renderer_init();
+    
     /* Initialize board */
     board_init(&global_board);
     
@@ -103,13 +83,10 @@ int main(int argc, char *argv[]) {
         board_load(&global_board, filepath);
     }
     
-    /* Draw initial board */
-    draw_board();
+    /* Enter event loop - handles all rendering and input */
+    event_loop();
     
-    /* Enter input loop */
-    input_loop();
-    
-    /* Save before exit */
+    /* Save before exit (auto-save is handled in handle_input, but do final save) */
     if (global_board.filename[0] != '\0') {
         board_save(&global_board, global_board.filename);
     }
