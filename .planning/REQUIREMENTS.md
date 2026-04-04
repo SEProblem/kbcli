@@ -9,14 +9,14 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 
 ### Core Board
 
-- [ ] **BRD-01**: User can view a 3-column kanban board (To Do / In Progress / Done)
-- [ ] **BRD-02**: User can create a new task with a title
-- [ ] **BRD-03**: User can delete an existing task
-- [ ] **BRD-04**: User can move tasks between columns
-- [ ] **BRD-05**: User can reorder tasks within a column
-- [ ] **BRD-06**: Visual indicator shows which task is currently selected
-- [ ] **BRD-07**: Board state persists to markdown file automatically
-- [ ] **BRD-08**: User can load an existing board from markdown file
+- [x] **BRD-01**: User can view a 3-column kanban board (To Do / In Progress / Done)
+- [x] **BRD-02**: User can create a new task with a title
+- [x] **BRD-03**: User can delete an existing task
+- [x] **BRD-04**: User can move tasks between columns
+- [x] **BRD-05**: User can reorder tasks within a column
+- [x] **BRD-06**: Visual indicator shows which task is currently selected
+- [x] **BRD-07**: Board state persists to markdown file automatically
+- [x] **BRD-08**: User can load an existing board from markdown file
 
 ### Navigation
 
@@ -55,16 +55,16 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 
 ### Storage & Persistence
 
-- [ ] **STO-01**: Board data stored in human-readable markdown format
+- [x] **STO-01**: Board data stored in human-readable markdown format
 - [ ] **STO-02**: Storage uses atomic writes (write temp, then rename)
-- [ ] **STO-03**: Application auto-saves on changes
-- [ ] **STO-04**: Markdown format compatible with GitHub-style task lists
+- [x] **STO-03**: Application auto-saves on changes
+- [x] **STO-04**: Markdown format compatible with GitHub-style task lists
 
 ### Application
 
-- [ ] **APP-01**: Application initializes ncurses TUI on launch
-- [ ] **APP-02**: User can quit gracefully from Normal mode (q or :q)
-- [ ] **APP-03**: Terminal is restored to original state on exit
+- [x] **APP-01**: Application initializes ncurses TUI on launch
+- [x] **APP-02**: User can quit gracefully from Normal mode (q or :q)
+- [x] **APP-03**: Terminal is restored to original state on exit
 - [ ] **APP-04**: Application handles terminal resize events
 - [ ] **APP-05**: Configuration file at ~/.config/kanban-cli/config
 - [ ] **APP-06**: User can customize keybindings via configuration
@@ -111,20 +111,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BRD-01 | Phase 1 | Pending |
-| BRD-02 | Phase 1 | Pending |
-| BRD-03 | Phase 1 | Pending |
-| BRD-04 | Phase 1 | Pending |
-| BRD-05 | Phase 1 | Pending |
-| BRD-06 | Phase 1 | Pending |
-| BRD-07 | Phase 1 | Pending |
-| BRD-08 | Phase 1 | Pending |
-| STO-01 | Phase 1 | Pending |
-| STO-03 | Phase 1 | Pending |
-| STO-04 | Phase 1 | Pending |
-| APP-01 | Phase 1 | Pending |
-| APP-02 | Phase 1 | Pending |
-| APP-03 | Phase 1 | Pending |
+| BRD-01 | Phase 1 | Complete |
+| BRD-02 | Phase 1 | Complete |
+| BRD-03 | Phase 1 | Complete |
+| BRD-04 | Phase 1 | Complete |
+| BRD-05 | Phase 1 | Complete |
+| BRD-06 | Phase 1 | Complete |
+| BRD-07 | Phase 1 | Complete |
+| BRD-08 | Phase 1 | Complete |
+| STO-01 | Phase 1 | Complete |
+| STO-03 | Phase 1 | Complete |
+| STO-04 | Phase 1 | Complete |
+| APP-01 | Phase 1 | Complete |
+| APP-02 | Phase 1 | Complete |
+| APP-03 | Phase 1 | Complete |
 | NAV-01 | Phase 2 | Pending |
 | NAV-02 | Phase 2 | Pending |
 | NAV-03 | Phase 2 | Pending |
