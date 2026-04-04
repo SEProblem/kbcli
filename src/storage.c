@@ -78,6 +78,23 @@ static int parse_column_header(const char *line) {
     return -1;  /* Unknown column */
 }
 
+/* Parse description from a task line following the title */
+static void parse_task_description(Task *task, const char *description_line) {
+    if (task == NULL || description_line == NULL) return;
+    
+    /* Skip "Description: " prefix (13 chars) */
+    const char *desc_start = description_line + 13;
+    trim_trailing((char*)desc_start);
+    
+    /* Copy description with bounds checking */
+    size_t desc_len = strlen(desc_start);
+    if (desc_len > 0) {
+        strncpy(task->description, desc_start, sizeof(task->description) - 1);
+        task->description[sizeof(task->description) - 1] = '\0';
+        task->desc_len = strlen(task->description);
+    }
+}
+
 /**
  * Parse a markdown file and populate a Board structure
  */
@@ -92,23 +109,37 @@ int parse_markdown(Board *board, const char *filepath) {
     
     char line[1024];
     int current_column = -1;
+    Task *last_task = NULL;
     
     while (fgets(line, sizeof(line), fp) != NULL) {
         /* Check for column header */
         int col = parse_column_header(line);
         if (col >= 0 && col < 3) {
             current_column = col;
+            last_task = NULL;
             continue;
         }
         
         /* If in a column, try to parse task */
         if (current_column >= 0) {
+            /* Check for Description: line */
+            if (last_task != NULL && strncmp(line, "Description: ", 13) == 0) {
+                parse_task_description(last_task, line);
+                continue;
+            }
+            
             Task *task = parse_task_line(line);
             if (task != NULL) {
                 /* Add task to column */
                 task->next = board->columns[current_column].tasks;
                 board->columns[current_column].tasks = task;
                 board->columns[current_column].task_count++;
+                last_task = task;
+            } else if (strncmp(line, "## ", 3) != 0 && line[0] != '\n' && line[0] != '\r') {
+                /* Non-task, non-header line - reset last_task tracking */
+                if (line[0] != '-') {
+                    last_task = NULL;
+                }
             }
         }
     }
@@ -155,6 +186,10 @@ int write_markdown(Board *board, const char *filepath) {
                 fprintf(fp, "- [x] %s\n", task->title);
             } else {
                 fprintf(fp, "- [ ] %s\n", task->title);
+            }
+            /* Write description if present */
+            if (task->description[0] != '\0') {
+                fprintf(fp, "Description: %s\n", task->description);
             }
             task = task->next;
         }
