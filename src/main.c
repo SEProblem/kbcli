@@ -71,6 +71,9 @@ int main(int argc, char *argv[]) {
     /* Reduce escape key delay for vim feel */
     set_escdelay(25);
     
+    /* Enable mouse support - NAV-05, NAV-06 per D-09 */
+    mousemask(ALL_MOUSE_EVENTS, NULL);
+    
     /* Initialize renderer state */
     renderer_init();
     
