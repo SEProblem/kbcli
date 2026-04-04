@@ -241,6 +241,22 @@ void render_board(Board *board) {
     
     mvprintw(status_y, 0, "%s", status_msg);
     
+    /* Show mode indicator per MOD-05 (Normal mode shows visual indicators) */
+    if (board->app_mode == MODE_INSERT) {
+        /* vim-style INSERT indicator at right side of status bar */
+        int insert_x = width - 12;  /* "-- INSERT --" is 12 chars */
+        if (insert_x > 0) {
+            mvprintw(status_y, insert_x, "-- INSERT --");
+        }
+    }
+    /* In Normal mode, show "NORMAL" indicator (optional - can be empty) */
+    else {
+        int normal_x = width - 8;
+        if (normal_x > 0) {
+            mvprintw(status_y, normal_x, "NORMAL");
+        }
+    }
+    
     /* Refresh to show all changes (per PITFALLS.md) */
     refresh();
 }

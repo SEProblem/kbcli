@@ -12,6 +12,15 @@
 #include <time.h>
 
 /**
+ * Mode enumeration for vim-style modal editing
+ * MOD-01, MOD-02 per requirements
+ */
+typedef enum {
+    MODE_NORMAL = 0,
+    MODE_INSERT
+} AppMode;
+
+/**
  * Task structure with GitHub-style markdown syntax
  * Uses linked list for column tasks
  */
@@ -38,6 +47,7 @@ typedef struct Board {
     Column columns[3];     /* To Do, In Progress, Done */
     char filename[512];    /* Markdown file path */
     time_t last_modified;  /* For change detection */
+    AppMode app_mode;      /* Current mode (Normal/Insert) per MOD-01, MOD-02 */
 } Board;
 
 /* Column names for default 3-column layout */

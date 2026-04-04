@@ -211,6 +211,7 @@ void board_init(Board *board) {
     
     board->filename[0] = '\0';
     board->last_modified = 0;
+    board->app_mode = MODE_NORMAL;  /* Default to Normal mode per MOD-01 */
 }
 
 /**
