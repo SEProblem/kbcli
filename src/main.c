@@ -39,8 +39,15 @@ static void event_loop(void) {
     int running = 1;
     
     while (running) {
-        /* Render the board (shows current state) */
-        render_board(&global_board);
+        /* Render based on current mode */
+        if (global_board.app_mode == MODE_DESCRIPTION_VIEW ||
+            global_board.app_mode == MODE_DESCRIPTION_EDIT) {
+            /* Render description popup */
+            render_description_popup(&global_board, &current_selection);
+        } else {
+            /* Render the board (shows current state) */
+            render_board(&global_board);
+        }
         
         /* Get user input */
         int key = getch();

@@ -54,6 +54,16 @@ const char* input_get_error(void);
 void input_clear_error(void);
 
 /**
+ * Read task description from user input
+ * Uses ncurses input field with prompt
+ * 
+ * @param buffer Buffer to store the description
+ * @param size Size of the buffer
+ * @return 0 on success, -1 on cancel
+ */
+int read_task_description(char *buffer, size_t size);
+
+/**
  * Handle terminal resize event
  * Uses soft resize (resizeterm) to update terminal dimensions
  * then recalculates layout and redraws all windows

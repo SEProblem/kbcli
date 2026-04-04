@@ -242,6 +242,16 @@ void render_board(Board *board) {
     
     mvprintw(status_y, 0, "%s", status_msg);
     
+    /* Show view mode indicator (Compact or Detailed) */
+    int view_mode_x = width - 18;
+    if (view_mode_x > 0) {
+        if (board->detailed_view) {
+            mvprintw(status_y, view_mode_x, "[Detailed View]");
+        } else {
+            mvprintw(status_y, view_mode_x, "[Compact View]");
+        }
+    }
+    
     /* Show mode indicator per MOD-05 (Normal mode shows visual indicators) */
     if (board->app_mode == MODE_INSERT) {
         /* vim-style INSERT indicator at right side of status bar */
@@ -259,6 +269,106 @@ void render_board(Board *board) {
     }
     
     /* Refresh to show all changes (per PITFALLS.md) */
+    refresh();
+}
+
+/**
+ * Render a description popup overlay
+ * Displays task title and description in a centered overlay window
+ * Per D-01, D-02, D-03: popup for viewing/editing descriptions
+ */
+void render_description_popup(Board *board, Selection *selection) {
+    if (board == NULL || selection == NULL) return;
+    
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    /* Get the selected task */
+    Column *col = &board->columns[selection->column_index];
+    Task *task = col->tasks;
+    int idx = selection->task_index;
+    while (task != NULL && idx > 0) {
+        task = task->next;
+        idx--;
+    }
+    
+    if (task == NULL) return;
+    
+    /* Calculate popup dimensions - 60% width */
+    int popup_width = (int)(width * 0.6);
+    if (popup_width < 40) popup_width = 40;
+    if (popup_width > width - 4) popup_width = width - 4;
+    
+    /* Calculate popup height based on content */
+    int desc_lines = 1;
+    if (task->description[0] != '\0') {
+        desc_lines = (int)(strlen(task->description) / (popup_width - 10)) + 2;
+    }
+    int popup_height = 6 + desc_lines;  /* Title + Description lines + border */
+    if (popup_height > height - 4) popup_height = height - 4;
+    
+    /* Calculate centered position */
+    int popup_y = (height - popup_height) / 2;
+    int popup_x = (width - popup_width) / 2;
+    if (popup_y < 1) popup_y = 1;
+    if (popup_x < 1) popup_x = 1;
+    
+    /* Draw popup border */
+    mvaddch(popup_y, popup_x, ACS_ULCORNER);
+    mvaddch(popup_y, popup_x + popup_width - 1, ACS_URCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x, ACS_LLCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x + popup_width - 1, ACS_LRCORNER);
+    
+    for (int x = popup_x + 1; x < popup_x + popup_width - 1; x++) {
+        mvaddch(popup_y, x, ACS_HLINE);
+        mvaddch(popup_y + popup_height - 1, x, ACS_HLINE);
+    }
+    for (int y = popup_y + 1; y < popup_y + popup_height - 1; y++) {
+        mvaddch(y, popup_x, ACS_VLINE);
+        mvaddch(y, popup_x + popup_width - 1, ACS_VLINE);
+    }
+    
+    /* Draw title bar */
+    int title_y = popup_y + 1;
+    char title_bar[256];
+    snprintf(title_bar, sizeof(title_bar), " Description: %s ", task->title);
+    mvprintw(title_y, popup_x + 2, "%s", title_bar);
+    
+    /* Draw description content */
+    int desc_y = popup_y + 3;
+    if (task->description[0] != '\0') {
+        /* Word-wrap description */
+        char *desc_copy = strdup(task->description);
+        if (desc_copy) {
+            char *word = strtok(desc_copy, "\n");
+            int y = desc_y;
+            int x = popup_x + 2;
+            int max_x = popup_x + popup_width - 3;
+            
+            while (word && y < popup_y + popup_height - 2) {
+                int word_len = strlen(word);
+                if (x + word_len > max_x) {
+                    y++;
+                    x = popup_x + 2;
+                }
+                if (y >= popup_y + popup_height - 2) break;
+                mvprintw(y, x, "%s ", word);
+                x += word_len + 1;
+                word = strtok(NULL, "\n");
+            }
+            free(desc_copy);
+        }
+    } else {
+        mvprintw(desc_y, popup_x + 2, "(No description - press Enter to edit)");
+    }
+    
+    /* Draw help text at bottom */
+    int help_y = popup_y + popup_height - 2;
+    char *mode_text = (board->app_mode == MODE_DESCRIPTION_EDIT) ? 
+        "EDITING: Type to edit | Enter: save | Esc: cancel" :
+        "VIEWING: Enter: edit | Esc: close";
+    mvprintw(help_y, popup_x + 2, "%s", mode_text);
+    
     refresh();
 }
 

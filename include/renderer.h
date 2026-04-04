@@ -37,22 +37,26 @@ void render_board(Board *board);
  * @param selected_col Whether this column is currently selected
  * @param sel_task_index Index of selected task in this column
  * @param scroll_offset Number of tasks to skip (for scrolling)
+ * @param detailed_view Whether to show detailed view with description/checklist
  */
 void render_column(Column *col, int start_x, int width, 
-                   int selected_col, int sel_task_index, int scroll_offset);
+                   int selected_col, int sel_task_index, int scroll_offset,
+                   int detailed_view);
 
 /**
  * Render a single task
  * Displays "- [ ] title" or "- [x] title" format
  * Applies reverse video highlight if selected
+ * In detailed_view mode, also shows description and checklist
  * 
  * @param task Pointer to task to render
  * @param y Row position
  * @param x Column position
  * @param width Available width for task display
  * @param selected Whether this task is currently selected
+ * @param detailed_view Whether to show detailed view
  */
-void render_task(Task *task, int y, int x, int width, int selected);
+void render_task(Task *task, int y, int x, int width, int selected, int detailed_view);
 
 /**
  * Highlight the selected task using reverse video
@@ -113,5 +117,15 @@ void renderer_calculate_layout(int lines, int cols);
  * Clears screen and renders all columns and status bar
  */
 void renderer_redraw_all(void);
+
+/**
+ * Render description popup overlay
+ * Displays task title and description in centered overlay
+ * Per D-01, D-02, D-03: popup for viewing/editing descriptions
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection state
+ */
+void render_description_popup(Board *board, Selection *selection);
 
 #endif /* RENDERER_H */

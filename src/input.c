@@ -142,6 +142,66 @@ int read_task_title(char *buffer, size_t size) {
 }
 
 /**
+ * Read task description from user input
+ * Uses ncurses input field with prompt
+ * 
+ * @param buffer Buffer to store the description
+ * @param size Size of the buffer
+ * @return 0 on success, -1 on cancel
+ */
+int read_task_description(char *buffer, size_t size) {
+    if (buffer == NULL || size == 0) return -1;
+    
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    /* Clear input buffer */
+    buffer[0] = '\0';
+    
+    /* Create input prompt */
+    int prompt_y = height - 2;
+    int prompt_x = 0;
+    
+    /* Show prompt */
+    mvprintw(prompt_y, prompt_x, "Description: ");
+    clrtoeol();
+    refresh();
+    
+    /* Move cursor to input position */
+    move(prompt_y, prompt_x + 13);
+    
+    /* Read input with bounds checking */
+    echo();
+    int ch;
+    size_t pos = 0;
+    
+    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
+        if (ch == 27) {  /* Escape to cancel */
+            buffer[0] = '\0';
+            noecho();
+            return -1;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127) {  /* Backspace */
+            if (pos > 0) {
+                pos--;
+                buffer[pos] = '\0';
+                delch();
+            }
+        } else if (ch >= 32 && ch <= 126 && pos < size - 1) {
+            buffer[pos++] = (char)ch;
+            buffer[pos] = '\0';
+        }
+    }
+    
+    noecho();
+    
+    /* Clear the input line */
+    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
+    
+    return (buffer[0] == '\0') ? -1 : 0;
+}
+
+/**
  * Enter Insert mode - allows text editing
  * MOD-03: User can enter Insert mode to edit task title
  */
@@ -203,17 +263,104 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
-    /* MODE_NORMAL: route keys for navigation and commands */
-    
-    /* 'i' - enter Insert mode (MOD-03) */
-    if (key == 'i') {
-        enter_insert_mode(board);
+    /* MODE_DESCRIPTION_VIEW: show description popup */
+    if (board->app_mode == MODE_DESCRIPTION_VIEW) {
+        /* Esc closes popup */
+        if (key == 27) {  /* Escape */
+            board->app_mode = MODE_NORMAL;
+            return 0;
+        }
+        /* Enter enters edit mode */
+        if (key == '\n' || key == KEY_ENTER) {
+            board->app_mode = MODE_DESCRIPTION_EDIT;
+            return 0;
+        }
+        /* 'i' also enters edit mode */
+        if (key == 'i') {
+            board->app_mode = MODE_DESCRIPTION_EDIT;
+            return 0;
+        }
         return 0;
     }
     
-    /* Enter key - enter Insert mode (MOD-03 alternative) */
+    /* MODE_DESCRIPTION_EDIT: edit description */
+    if (board->app_mode == MODE_DESCRIPTION_EDIT) {
+        /* First entry to edit mode - prompt for description */
+        static int just_entered = 1;
+        
+        if (just_entered) {
+            just_entered = 0;
+            
+            /* Get the selected task */
+            Column *col = &board->columns[selection->column_index];
+            Task *task = col->tasks;
+            int idx = selection->task_index;
+            while (task != NULL && idx > 0) {
+                task = task->next;
+                idx--;
+            }
+            
+            if (task != NULL) {
+                /* Read description from user */
+                char desc[MAX_DESC_LEN];
+                strncpy(desc, task->description, sizeof(desc) - 1);
+                desc[sizeof(desc) - 1] = '\0';
+                
+                if (read_task_description(desc, sizeof(desc)) == 0) {
+                    /* Copy description to task */
+                    strncpy(task->description, desc, sizeof(task->description) - 1);
+                    task->description[sizeof(task->description) - 1] = '\0';
+                    task->desc_len = strlen(task->description);
+                    
+                    /* Auto-save after editing description */
+                    if (board->filename[0] != '\0') {
+                        board_save(board, board->filename);
+                    }
+                }
+            }
+            
+            board->app_mode = MODE_NORMAL;
+            return 0;
+        }
+        
+        /* Esc cancels editing */
+        if (key == 27) {  /* Escape - cancel and close */
+            just_entered = 1;
+            board->app_mode = MODE_NORMAL;
+            return 0;
+        }
+        /* Enter saves and closes */
+        if (key == '\n' || key == KEY_ENTER) {
+            just_entered = 1;
+            /* Description was edited, save to file */
+            if (board->filename[0] != '\0') {
+                board_save(board, board->filename);
+            }
+            board->app_mode = MODE_NORMAL;
+            return 0;
+        }
+        /* Pass through for text input in description edit mode */
+        return 0;
+    }
+    
+    /* MODE_NORMAL: route keys for navigation and commands */
+    
+    /* 'i' - also open description popup (D-01) */
+    if (key == 'i') {
+        /* Check if there's a selected task */
+        Column *col = &board->columns[selection->column_index];
+        if (col->task_count > 0) {
+            board->app_mode = MODE_DESCRIPTION_VIEW;
+        }
+        return 0;
+    }
+    
+    /* Enter key - open description popup (D-01) */
     if (key == KEY_ENTER) {
-        enter_insert_mode(board);
+        Column *col = &board->columns[selection->column_index];
+        if (col->task_count > 0) {
+            board->app_mode = MODE_DESCRIPTION_VIEW;
+        }
         return 0;
     }
     
@@ -408,6 +555,14 @@ int handle_input(Board *board, int key, Selection *selection) {
         /* 'G' - jump to last task (bottom of column) */
         case 'G': {
             selection->task_index = (task_count > 0) ? task_count - 1 : 0;
+            break;
+        }
+        
+        /* 'v' - toggle between compact and detailed view */
+        case 'v': {
+            board->detailed_view = !board->detailed_view;
+            /* Reset checklist index when toggling view */
+            board->checklist_index = 0;
             break;
         }
         
