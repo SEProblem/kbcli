@@ -24,8 +24,8 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 - [x] **NAV-02**: User can navigate using arrow keys as alternative
 - [x] **NAV-03**: User can jump to top/bottom of column (gg/G)
 - [x] **NAV-04**: User can jump between columns (H/L or Tab/Shift+Tab)
-- [ ] **NAV-05**: Mouse click selects a task
-- [ ] **NAV-06**: Scroll wheel scrolls within a column
+- [x] **NAV-05**: Mouse click selects a task
+- [x] **NAV-06**: Scroll wheel scrolls within a column
 
 ### Vim Modal Editing
 
@@ -129,8 +129,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NAV-02 | Phase 2 | Complete |
 | NAV-03 | Phase 2 | Complete |
 | NAV-04 | Phase 2 | Complete |
-| NAV-05 | Phase 2 | Pending |
-| NAV-06 | Phase 2 | Pending |
+| NAV-05 | Phase 2 | Complete |
+| NAV-06 | Phase 2 | Complete |
 | MOD-01 | Phase 2 | Complete |
 | MOD-02 | Phase 2 | Complete |
 | MOD-03 | Phase 2 | Complete |
