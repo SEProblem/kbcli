@@ -221,6 +221,37 @@ int handle_input(Board *board, int key, Selection *selection) {
             break;
         }
         
+        /* Arrow keys - column navigation */
+        case KEY_RIGHT: {
+            /* Move to next column */
+            if (selection->column_index < 2) {
+                selection->column_index++;
+                /* Clamp task index to valid range */
+                int new_count = board->columns[selection->column_index].task_count;
+                if (selection->task_index >= new_count && new_count > 0) {
+                    selection->task_index = new_count - 1;
+                } else if (new_count == 0) {
+                    selection->task_index = 0;
+                }
+            }
+            break;
+        }
+        
+        case KEY_LEFT: {
+            /* Move to previous column */
+            if (selection->column_index > 0) {
+                selection->column_index--;
+                /* Clamp task index to valid range */
+                int new_count = board->columns[selection->column_index].task_count;
+                if (selection->task_index >= new_count && new_count > 0) {
+                    selection->task_index = new_count - 1;
+                } else if (new_count == 0) {
+                    selection->task_index = 0;
+                }
+            }
+            break;
+        }
+        
         case 'l': {
             /* Move selected task to right column (D-10) */
             if (move_right(board, selection) == 0) {
