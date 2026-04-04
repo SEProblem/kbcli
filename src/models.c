@@ -224,3 +224,221 @@ void board_free(Board *board) {
         column_free_tasks(&board->columns[i]);
     }
 }
+
+/**
+ * Move a task to a specific position in a column
+ */
+void task_move_to_column(Task *task, Column *from, Column *to, int position) {
+    if (task == NULL || from == NULL || to == NULL) return;
+    
+    /* Remove from source column */
+    Task **current = &from->tasks;
+    while (*current != NULL) {
+        if (*current == task) {
+            *current = task->next;
+            from->task_count--;
+            break;
+        }
+        current = &(*current)->next;
+    }
+    
+    /* Insert at position in target column */
+    if (position <= 0 || to->tasks == NULL) {
+        /* Insert at head */
+        task->next = to->tasks;
+        to->tasks = task;
+        to->task_count++;
+        return;
+    }
+    
+    /* Find position */
+    Task *prev = to->tasks;
+    int idx = position - 1;
+    while (prev->next != NULL && idx > 0) {
+        prev = prev->next;
+        idx--;
+    }
+    
+    /* Insert after prev */
+    task->next = prev->next;
+    prev->next = task;
+    to->task_count++;
+}
+
+/**
+ * Move selected task to the column on the left
+ */
+int move_left(Board *board, Selection *selection) {
+    if (board == NULL || selection == NULL) return -1;
+    
+    /* Can't move left from column 0 */
+    if (selection->column_index <= 0) return -1;
+    
+    Column *from = &board->columns[selection->column_index];
+    Column *to = &board->columns[selection->column_index - 1];
+    
+    /* Get task at current selection */
+    Task *task = from->tasks;
+    int idx = selection->task_index;
+    while (task != NULL && idx > 0) {
+        task = task->next;
+        idx--;
+    }
+    
+    if (task == NULL) return -1;
+    
+    /* Move task to left column at end */
+    task_move_to_column(task, from, to, -1);
+    
+    /* Update selection to track new position in new column */
+    selection->column_index--;
+    selection->task_index = (to->task_count > 0) ? to->task_count - 1 : 0;
+    
+    return 0;
+}
+
+/**
+ * Move selected task to the column on the right
+ */
+int move_right(Board *board, Selection *selection) {
+    if (board == NULL || selection == NULL) return -1;
+    
+    /* Can't move right from column 2 */
+    if (selection->column_index >= 2) return -1;
+    
+    Column *from = &board->columns[selection->column_index];
+    Column *to = &board->columns[selection->column_index + 1];
+    
+    /* Get task at current selection */
+    Task *task = from->tasks;
+    int idx = selection->task_index;
+    while (task != NULL && idx > 0) {
+        task = task->next;
+        idx--;
+    }
+    
+    if (task == NULL) return -1;
+    
+    /* Move task to right column at end */
+    task_move_to_column(task, from, to, -1);
+    
+    /* Update selection to track new position in new column */
+    selection->column_index++;
+    selection->task_index = (to->task_count > 0) ? to->task_count - 1 : 0;
+    
+    return 0;
+}
+
+/**
+ * Move selected task up within current column
+ */
+int move_up(Board *board, Selection *selection) {
+    if (board == NULL || selection == NULL) return -1;
+    
+    Column *col = &board->columns[selection->column_index];
+    
+    /* Can't move up if at position 0 */
+    if (selection->task_index <= 0) return -1;
+    
+    /* Need at least 2 tasks to reorder */
+    if (col->task_count < 2) return -1;
+    
+    /* Get the task before the selected one */
+    Task *prev_task = col->tasks;
+    Task *selected_task = NULL;
+    int idx = selection->task_index;
+    
+    while (prev_task != NULL && idx > 0) {
+        if (idx == 1) {
+            selected_task = prev_task->next;
+            break;
+        }
+        prev_task = prev_task->next;
+        idx--;
+    }
+    
+    if (selected_task == NULL) return -1;
+    
+    /* Swap with previous task */
+    Task *before_prev = col->tasks;
+    int pos = selection->task_index - 2;
+    while (before_prev != NULL && pos > 0) {
+        before_prev = before_prev->next;
+        pos--;
+    }
+    
+    if (before_prev == NULL) {
+        /* Selected task is at position 1, prev_task is at head */
+        Task *head = col->tasks;
+        col->tasks = selected_task;
+        prev_task->next = selected_task->next;
+        selected_task->next = prev_task;
+    } else {
+        /* Swap positions */
+        Task *temp = selected_task->next;
+        selected_task->next = prev_task->next;
+        prev_task->next = temp;
+        before_prev->next = selected_task;
+    }
+    
+    /* Update selection */
+    selection->task_index--;
+    
+    return 0;
+}
+
+/**
+ * Move selected task down within current column
+ */
+int move_down(Board *board, Selection *selection) {
+    if (board == NULL || selection == NULL) return -1;
+    
+    Column *col = &board->columns[selection->column_index];
+    
+    /* Can't move down if at last position */
+    if (selection->task_index >= col->task_count - 1) return -1;
+    
+    /* Need at least 2 tasks to reorder */
+    if (col->task_count < 2) return -1;
+    
+    /* Get the task after the selected one */
+    Task *selected_task = col->tasks;
+    Task *next_task = NULL;
+    int idx = selection->task_index;
+    
+    while (selected_task != NULL && idx > 0) {
+        selected_task = selected_task->next;
+        idx--;
+    }
+    
+    if (selected_task == NULL || selected_task->next == NULL) return -1;
+    
+    next_task = selected_task->next;
+    
+    /* Swap positions */
+    Task *before_selected = col->tasks;
+    int pos = selection->task_index - 1;
+    while (before_selected != NULL && pos > 0) {
+        before_selected = before_selected->next;
+        pos--;
+    }
+    
+    if (before_selected == NULL) {
+        /* Selected task is at head */
+        Task *temp = next_task->next;
+        col->tasks = next_task;
+        next_task->next = selected_task;
+        selected_task->next = temp;
+    } else {
+        /* Swap positions */
+        Task *temp = next_task->next;
+        next_task->next = selected_task;
+        selected_task->next = temp;
+        before_selected->next = next_task;
+    }
+    
+    /* Update selection */
+    selection->task_index++;
+    
+    return 0;
+}

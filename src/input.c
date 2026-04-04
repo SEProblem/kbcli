@@ -221,33 +221,23 @@ int handle_input(Board *board, int key, Selection *selection) {
             break;
         }
         
-        case KEY_RIGHT:
         case 'l': {
-            /* Move to next column */
-            if (selection->column_index < 2) {
-                selection->column_index++;
-                /* Clamp task index to valid range */
-                int new_count = board->columns[selection->column_index].task_count;
-                if (selection->task_index >= new_count && new_count > 0) {
-                    selection->task_index = new_count - 1;
-                } else if (new_count == 0) {
-                    selection->task_index = 0;
+            /* Move selected task to right column (D-10) */
+            if (move_right(board, selection) == 0) {
+                /* Auto-save per D-14 and STO-03 */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
                 }
             }
             break;
         }
         
-        case KEY_LEFT:
         case 'h': {
-            /* Move to previous column */
-            if (selection->column_index > 0) {
-                selection->column_index--;
-                /* Clamp task index to valid range */
-                int new_count = board->columns[selection->column_index].task_count;
-                if (selection->task_index >= new_count && new_count > 0) {
-                    selection->task_index = new_count - 1;
-                } else if (new_count == 0) {
-                    selection->task_index = 0;
+            /* Move selected task to left column (D-09) */
+            if (move_left(board, selection) == 0) {
+                /* Auto-save per D-14 and STO-03 */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
                 }
             }
             break;
@@ -298,6 +288,28 @@ int handle_input(Board *board, int key, Selection *selection) {
         /* Handle resize */
         case KEY_RESIZE: {
             /* Will be handled by redraw in main loop */
+            break;
+        }
+        
+        /* 'J' (Shift+j) - move task up within column (D-11) */
+        case 'J': {
+            if (move_up(board, selection) == 0) {
+                /* Auto-save per D-14 and STO-03 */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            break;
+        }
+        
+        /* 'K' (Shift+k) - move task down within column (D-11) */
+        case 'K': {
+            if (move_down(board, selection) == 0) {
+                /* Auto-save per D-14 and STO-03 */
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
             break;
         }
         

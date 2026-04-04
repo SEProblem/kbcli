@@ -8,6 +8,7 @@
 #define MODELS_H
 
 #include "kanban.h"
+#include "renderer.h"
 
 /**
  * Generate a UUID v4 string
@@ -85,5 +86,56 @@ void board_init(Board *board);
  * @param board Pointer to board to free
  */
 void board_free(Board *board);
+
+/**
+ * Move a task to a specific position in a column
+ * Removes from source column and inserts at position in target column
+ * 
+ * @param task Pointer to task to move
+ * @param from Source column
+ * @param to Target column
+ * @param position Position to insert at (0=at top, -1=at end)
+ */
+void task_move_to_column(Task *task, Column *from, Column *to, int position);
+
+/**
+ * Move selected task to the column on the left (D-09)
+ * Called when user presses 'h'
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ * @return 0 on success, -1 if at leftmost column
+ */
+int move_left(Board *board, Selection *selection);
+
+/**
+ * Move selected task to the column on the right (D-10)
+ * Called when user presses 'l'
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ * @return 0 on success, -1 if at rightmost column
+ */
+int move_right(Board *board, Selection *selection);
+
+/**
+ * Move selected task up within current column (D-11)
+ * Called when user presses 'J' (Shift+j)
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ * @return 0 on success, -1 if at top
+ */
+int move_up(Board *board, Selection *selection);
+
+/**
+ * Move selected task down within current column (D-11)
+ * Called when user presses 'K' (Shift+k)
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ * @return 0 on success, -1 if at bottom
+ */
+int move_down(Board *board, Selection *selection);
 
 #endif /* MODELS_H */
