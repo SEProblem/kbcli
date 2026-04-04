@@ -37,13 +37,13 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 
 ### Task Details
 
-- [ ] **TSK-01**: User can view task description in addition to title
-- [ ] **TSK-02**: User can toggle between title-only and detailed view
-- [ ] **TSK-03**: User can edit task description
-- [ ] **TSK-04**: Tasks can have checklists (subtasks)
-- [ ] **TSK-05**: User can toggle checklist items (complete/incomplete)
-- [ ] **TSK-06**: User can add checklist items to a task
-- [ ] **TSK-07**: User can delete checklist items from a task
+- [x] **TSK-01**: User can view task description in addition to title
+- [x] **TSK-02**: User can toggle between title-only and detailed view
+- [x] **TSK-03**: User can edit task description
+- [x] **TSK-04**: Tasks can have checklists (subtasks)
+- [x] **TSK-05**: User can toggle checklist items (complete/incomplete)
+- [x] **TSK-06**: User can add checklist items to a task
+- [x] **TSK-07**: User can delete checklist items from a task
 
 ### Multiple Boards
 
@@ -56,7 +56,7 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 ### Storage & Persistence
 
 - [x] **STO-01**: Board data stored in human-readable markdown format
-- [ ] **STO-02**: Storage uses atomic writes (write temp, then rename)
+- [x] **STO-02**: Storage uses atomic writes (write temp, then rename)
 - [x] **STO-03**: Application auto-saves on changes
 - [x] **STO-04**: Markdown format compatible with GitHub-style task lists
 
@@ -66,9 +66,9 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 - [x] **APP-02**: User can quit gracefully from Normal mode (q or :q)
 - [x] **APP-03**: Terminal is restored to original state on exit
 - [x] **APP-04**: Application handles terminal resize events
-- [ ] **APP-05**: Configuration file at ~/.config/kanban-cli/config
-- [ ] **APP-06**: User can customize keybindings via configuration
-- [ ] **APP-07**: User can set default board directory via configuration
+- [x] **APP-05**: Configuration file at ~/.config/kanban-cli/config
+- [x] **APP-06**: User can customize keybindings via configuration
+- [x] **APP-07**: User can set default board directory via configuration
 
 ## v2 Requirements
 
@@ -137,22 +137,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MOD-04 | Phase 2 | Complete |
 | MOD-05 | Phase 2 | Complete |
 | APP-04 | Phase 2 | Complete |
-| TSK-01 | Phase 3 | Pending |
-| TSK-02 | Phase 3 | Pending |
-| TSK-03 | Phase 3 | Pending |
-| TSK-04 | Phase 3 | Pending |
-| TSK-05 | Phase 3 | Pending |
-| TSK-06 | Phase 3 | Pending |
-| TSK-07 | Phase 3 | Pending |
-| STO-02 | Phase 3 | Pending |
+| TSK-01 | Phase 3 | Complete |
+| TSK-02 | Phase 3 | Complete |
+| TSK-03 | Phase 3 | Complete |
+| TSK-04 | Phase 3 | Complete |
+| TSK-05 | Phase 3 | Complete |
+| TSK-06 | Phase 3 | Complete |
+| TSK-07 | Phase 3 | Complete |
+| STO-02 | Phase 3 | Complete |
 | MBD-01 | Phase 4 | Pending |
 | MBD-02 | Phase 4 | Pending |
 | MBD-03 | Phase 4 | Pending |
 | MBD-04 | Phase 4 | Pending |
 | MBD-05 | Phase 4 | Pending |
-| APP-05 | Phase 4 | Pending |
-| APP-06 | Phase 4 | Pending |
-| APP-07 | Phase 4 | Pending |
+| APP-05 | Phase 4 | Complete |
+| APP-06 | Phase 4 | Complete |
+| APP-07 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 40 total
