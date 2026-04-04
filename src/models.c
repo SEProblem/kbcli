@@ -343,42 +343,40 @@ int move_up(Board *board, Selection *selection) {
     /* Need at least 2 tasks to reorder */
     if (col->task_count < 2) return -1;
     
-    /* Get the task before the selected one */
-    Task *prev_task = col->tasks;
-    Task *selected_task = NULL;
+    /* Get task at current position and previous */
+    Task *prev = NULL;
+    Task *current = col->tasks;
     int idx = selection->task_index;
     
-    while (prev_task != NULL && idx > 0) {
-        if (idx == 1) {
-            selected_task = prev_task->next;
-            break;
-        }
-        prev_task = prev_task->next;
+    while (current != NULL && idx > 0) {
+        prev = current;
+        current = current->next;
         idx--;
     }
     
-    if (selected_task == NULL) return -1;
+    if (current == NULL || prev == NULL) return -1;
     
-    /* Swap with previous task */
-    Task *before_prev = col->tasks;
-    int pos = selection->task_index - 2;
-    while (before_prev != NULL && pos > 0) {
-        before_prev = before_prev->next;
-        pos--;
+    /* Get task before prev (for swap) */
+    Task *before_prev = NULL;
+    Task *temp = col->tasks;
+    int search_idx = selection->task_index - 2;
+    
+    while (temp != NULL && search_idx > 0) {
+        before_prev = temp;
+        temp = temp->next;
+        search_idx--;
     }
     
+    /* Swap current and prev */
     if (before_prev == NULL) {
-        /* Selected task is at position 1, prev_task is at head */
-        Task *head = col->tasks;
-        col->tasks = selected_task;
-        prev_task->next = selected_task->next;
-        selected_task->next = prev_task;
+        /* prev is at head */
+        col->tasks = current;
+        prev->next = current->next;
+        current->next = prev;
     } else {
-        /* Swap positions */
-        Task *temp = selected_task->next;
-        selected_task->next = prev_task->next;
-        prev_task->next = temp;
-        before_prev->next = selected_task;
+        before_prev->next = current;
+        prev->next = current->next;
+        current->next = prev;
     }
     
     /* Update selection */
