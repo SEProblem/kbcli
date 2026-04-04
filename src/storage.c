@@ -16,6 +16,7 @@
 #include "kanban.h"
 #include "models.h"
 #include "storage.h"
+#include "config.h"
 
 /* Trim trailing whitespace from a string */
 static void trim_trailing(char *str) {
@@ -325,10 +326,23 @@ int board_save(Board *board, const char *filepath) {
 
 /**
  * Get the default board file path
+ * Uses config's default_board and board_directory if available
  */
 int get_default_board_path(char *buffer, size_t size) {
     if (buffer == NULL || size == 0) return -1;
     
+    /* Try to get board directory from config */
+    Config config;
+    config_load(&config);
+    const char *board_dir = config_get_board_directory(&config);
+    
+    if (board_dir != NULL && board_dir[0] != '\0') {
+        /* Use configured board directory with default board name */
+        snprintf(buffer, size, "%s%s.md", board_dir, config.default_board);
+        return 0;
+    }
+    
+    /* Fallback to default */
     const char *home = getenv("HOME");
     if (home == NULL) {
         return -1;
@@ -340,11 +354,24 @@ int get_default_board_path(char *buffer, size_t size) {
 
 /**
  * Get the boards directory path
- * Returns ~/.config/kanban-cli/boards/ or from config if available
+ * Returns from config if configured, otherwise default path
  */
 int get_boards_directory(char *buffer, size_t size) {
     if (buffer == NULL || size == 0) return -1;
     
+    /* Try to get board directory from config */
+    Config config;
+    config_load(&config);
+    const char *board_dir = config_get_board_directory(&config);
+    
+    if (board_dir != NULL && board_dir[0] != '\0') {
+        /* Use configured board directory */
+        strncpy(buffer, board_dir, size - 1);
+        buffer[size - 1] = '\0';
+        return 0;
+    }
+    
+    /* Fallback to default */
     const char *home = getenv("HOME");
     if (home == NULL) {
         return -1;

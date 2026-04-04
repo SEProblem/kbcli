@@ -16,6 +16,7 @@
 #include "storage.h"
 #include "renderer.h"
 #include "input.h"
+#include "config.h"
 
 /* Global board instance */
 static Board global_board;
@@ -68,6 +69,11 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
     atexit(cleanup);
+    
+    /* Load configuration and apply keybindings */
+    Config app_config;
+    config_load(&app_config);
+    apply_keybindings_from_config(app_config.keybindings);
     
     /* Initialize ncurses */
     initscr();
