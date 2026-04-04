@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 3
-status: planning
+status: planned
 last_updated: "2026-04-04T08:11:12.580Z"
 progress:
   total_phases: 4

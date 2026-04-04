@@ -87,7 +87,11 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 7. User can delete checklist items from tasks
 8. File writes use atomic operations (temp file + fsync + rename) to prevent corruption
 
-**Plans**: TBD
+**Plans:** 2 plans in 2 waves
+
+**Plan list:**
+- [ ] 03-01-PLAN.md — Task description and atomic file operations
+- [ ] 03-02-PLAN.md — View toggle and checklist support
 
 ### Phase 4: Multi-Board & Configuration
 **Goal**: Users can manage multiple boards and customize application behavior through configuration
@@ -114,7 +118,7 @@ This roadmap delivers a terminal-based kanban board using C/C++ and ncurses with
 |-------|----------------|--------|-----------|
 | 1. Core Kanban Foundation | 3/3 | Complete    | 2026-04-04 |
 | 2. Input Handling & Modal Editing | 4/4 | Complete   | 2026-04-04 |
-| 3. Task Details & Data Safety | 0/2 | Not started | - |
+| 3. Task Details & Data Safety | 0/2 | Planning | - |
 | 4. Multi-Board & Configuration | 0/2 | Not started | - |
 
 ## Requirement Coverage
