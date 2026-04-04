@@ -20,20 +20,20 @@ Requirements for Milestone v1.0 — complete kanban board with TUI, vim navigati
 
 ### Navigation
 
-- [ ] **NAV-01**: User can navigate tasks using hjkl keys (vim-style)
-- [ ] **NAV-02**: User can navigate using arrow keys as alternative
-- [ ] **NAV-03**: User can jump to top/bottom of column (gg/G)
-- [ ] **NAV-04**: User can jump between columns (H/L or Tab/Shift+Tab)
+- [x] **NAV-01**: User can navigate tasks using hjkl keys (vim-style)
+- [x] **NAV-02**: User can navigate using arrow keys as alternative
+- [x] **NAV-03**: User can jump to top/bottom of column (gg/G)
+- [x] **NAV-04**: User can jump between columns (H/L or Tab/Shift+Tab)
 - [ ] **NAV-05**: Mouse click selects a task
 - [ ] **NAV-06**: Scroll wheel scrolls within a column
 
 ### Vim Modal Editing
 
-- [ ] **MOD-01**: Application has Normal mode for navigation and commands
-- [ ] **MOD-02**: Application has Insert mode for editing text
-- [ ] **MOD-03**: User can enter Insert mode to edit task title (i or Enter)
-- [ ] **MOD-04**: User can exit Insert mode back to Normal mode (Esc)
-- [ ] **MOD-05**: Normal mode shows visual indicators for available actions
+- [x] **MOD-01**: Application has Normal mode for navigation and commands
+- [x] **MOD-02**: Application has Insert mode for editing text
+- [x] **MOD-03**: User can enter Insert mode to edit task title (i or Enter)
+- [x] **MOD-04**: User can exit Insert mode back to Normal mode (Esc)
+- [x] **MOD-05**: Normal mode shows visual indicators for available actions
 
 ### Task Details
 
@@ -125,17 +125,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APP-01 | Phase 1 | Complete |
 | APP-02 | Phase 1 | Complete |
 | APP-03 | Phase 1 | Complete |
-| NAV-01 | Phase 2 | Pending |
-| NAV-02 | Phase 2 | Pending |
-| NAV-03 | Phase 2 | Pending |
-| NAV-04 | Phase 2 | Pending |
+| NAV-01 | Phase 2 | Complete |
+| NAV-02 | Phase 2 | Complete |
+| NAV-03 | Phase 2 | Complete |
+| NAV-04 | Phase 2 | Complete |
 | NAV-05 | Phase 2 | Pending |
 | NAV-06 | Phase 2 | Pending |
-| MOD-01 | Phase 2 | Pending |
-| MOD-02 | Phase 2 | Pending |
-| MOD-03 | Phase 2 | Pending |
-| MOD-04 | Phase 2 | Pending |
-| MOD-05 | Phase 2 | Pending |
+| MOD-01 | Phase 2 | Complete |
+| MOD-02 | Phase 2 | Complete |
+| MOD-03 | Phase 2 | Complete |
+| MOD-04 | Phase 2 | Complete |
+| MOD-05 | Phase 2 | Complete |
 | APP-04 | Phase 2 | Pending |
 | TSK-01 | Phase 3 | Pending |
 | TSK-02 | Phase 3 | Pending |
