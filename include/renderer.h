@@ -128,4 +128,20 @@ void renderer_redraw_all(void);
  */
 void render_description_popup(Board *board, Selection *selection);
 
+/**
+ * Render a scrollable list of available boards
+ * Displays board names with current board highlighted
+ * 
+ * @param board_names Array of board names
+ * @param count Number of boards
+ * @param selected Currently selected board index
+ */
+void render_board_list(char **board_names, int count, int selected);
+
+/**
+ * Show board list menu and wait for user selection
+ * Returns selected board name (caller must free), or NULL on cancel
+ */
+char* show_board_list_menu(void);
+
 #endif /* RENDERER_H */

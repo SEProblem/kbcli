@@ -13,6 +13,7 @@
 #include "kanban.h"
 #include "models.h"
 #include "storage.h"
+#include "renderer.h"
 #include "input.h"
 
 /* External board management state - stores current board name */
@@ -1163,8 +1164,14 @@ int handle_colon_command(Board *board, Selection *selection) {
     } else if (strcmp(command, "bnew") == 0 || strcmp(command, "bcreate") == 0) {
         /* Create new board */
         create_new_board(board, selection);
+    } else if (strcmp(command, "blist") == 0 || strcmp(command, "boards") == 0) {
+        /* Show board list menu */
+        char *selected_board = show_board_list_menu();
+        if (selected_board != NULL) {
+            switch_to_board(board, selection, selected_board);
+            free(selected_board);
+        }
     }
-    /* :blist or :boards would show menu - handled in renderer */
     
     return 0;
 }

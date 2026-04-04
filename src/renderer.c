@@ -12,6 +12,7 @@
 
 #include "kanban.h"
 #include "renderer.h"
+#include "storage.h"
 
 /* Global selection state */
 static Selection global_selection = {0, 0};
@@ -444,4 +445,168 @@ void renderer_redraw_all(void) {
     /* Update panels and refresh */
     update_panels();
     doupdate();
+}
+
+/**
+ * Render a scrollable list of available boards
+ * Displays board names with current board highlighted
+ * 
+ * @param board_names Array of board names
+ * @param count Number of boards
+ * @param selected Currently selected board index
+ */
+void render_board_list(char **board_names, int count, int selected) {
+    if (board_names == NULL || count <= 0) return;
+    
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    /* Clear screen for board list */
+    clear();
+    
+    /* Calculate dimensions */
+    int menu_height = height - 4;
+    int menu_width = 40;
+    if (menu_width > width - 4) menu_width = width - 4;
+    
+    /* Center position */
+    int start_y = (height - menu_height) / 2;
+    int start_x = (width - menu_width) / 2;
+    if (start_y < 1) start_y = 1;
+    if (start_x < 1) start_x = 1;
+    
+    /* Draw border */
+    mvaddch(start_y, start_x, ACS_ULCORNER);
+    mvaddch(start_y, start_x + menu_width - 1, ACS_URCORNER);
+    mvaddch(start_y + menu_height - 1, start_x, ACS_LLCORNER);
+    mvaddch(start_y + menu_height - 1, start_x + menu_width - 1, ACS_LRCORNER);
+    
+    for (int x = start_x + 1; x < start_x + menu_width - 1; x++) {
+        mvaddch(start_y, x, ACS_HLINE);
+        mvaddch(start_y + menu_height - 1, x, ACS_HLINE);
+    }
+    for (int y = start_y + 1; y < start_y + menu_height - 1; y++) {
+        mvaddch(y, start_x, ACS_VLINE);
+        mvaddch(y, start_x + menu_width - 1, ACS_VLINE);
+    }
+    
+    /* Title */
+    mvwprintw(stdscr, start_y + 1, start_x + 2, " Board List ");
+    
+    /* Get current board name */
+    extern char global_current_board_name[];
+    
+    /* Draw board names */
+    int list_start_y = start_y + 3;
+    int max_display = menu_height - 5;
+    
+    for (int i = 0; i < count && i < max_display; i++) {
+        int y = list_start_y + i;
+        
+        /* Highlight current board */
+        int is_current = 0;
+        if (board_names[i] != NULL && 
+            strcmp(board_names[i], global_current_board_name) == 0) {
+            is_current = 1;
+        }
+        
+        /* Highlight selected */
+        if (i == selected) {
+            attron(A_REVERSE);
+        }
+        
+        /* Mark current board with * */
+        if (is_current) {
+            mvwprintw(stdscr, y, start_x + 2, "* %s", board_names[i]);
+        } else {
+            mvwprintw(stdscr, y, start_x + 2, "  %s", board_names[i]);
+        }
+        
+        if (i == selected) {
+            attroff(A_REVERSE);
+        }
+    }
+    
+    /* Help text */
+    mvwprintw(stdscr, start_y + menu_height - 2, start_x + 2, 
+              "j/k: navigate | Enter: select | Esc: cancel");
+    
+    refresh();
+}
+
+/**
+ * Show board list menu and wait for user selection
+ * Returns selected board name (caller must free), or NULL on cancel
+ */
+char* show_board_list_menu(void) {
+    /* Get available boards */
+    char **boards = NULL;
+    int count = 0;
+    
+    if (board_list_boards(&boards, &count) != 0 || count == 0) {
+        return NULL;
+    }
+    
+    /* Get current board name */
+    extern char global_current_board_name[];
+    
+    /* Find current board index */
+    int selected = 0;
+    for (int i = 0; i < count; i++) {
+        if (boards[i] != NULL && 
+            strcmp(boards[i], global_current_board_name) == 0) {
+            selected = i;
+            break;
+        }
+    }
+    
+    /* Render initial list */
+    render_board_list(boards, count, selected);
+    
+    /* Input loop */
+    int done = 0;
+    char *result = NULL;
+    
+    while (!done) {
+        int key = getch();
+        
+        switch (key) {
+            case KEY_DOWN:
+            case 'j':
+                if (selected < count - 1) {
+                    selected++;
+                    render_board_list(boards, count, selected);
+                }
+                break;
+                
+            case KEY_UP:
+            case 'k':
+                if (selected > 0) {
+                    selected--;
+                    render_board_list(boards, count, selected);
+                }
+                break;
+                
+            case '\n':
+            case KEY_ENTER:
+                /* Select current board */
+                if (boards[selected] != NULL) {
+                    result = strdup(boards[selected]);
+                }
+                done = 1;
+                break;
+                
+            case 27:  /* Escape */
+                done = 1;
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    /* Cleanup */
+    board_list_free(boards, count);
+    
+    return result;
 }
