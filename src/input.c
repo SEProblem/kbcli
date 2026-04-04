@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <ncurses.h>
 
 #include "kanban.h"
@@ -16,6 +17,10 @@
 
 /* Static error message for input failures */
 static char input_error[256] = {0};
+
+/* Timestamp for double-g detection (jump to top) */
+static time_t last_g_press_time = 0;
+#define G_DOUBLE_TAP_TIMEOUT_MS 300
 
 /* External board filename for auto-save */
 extern char global_board_filename[512];
@@ -306,9 +311,18 @@ int handle_input(Board *board, int key, Selection *selection) {
             break;
         }
         
-        /* 'g' - jump to first task (top of column) */
+        /* 'g' - jump to first task (top of column), supports double-tap gg */
         case 'g': {
-            selection->task_index = 0;
+            /* Check for double-tap (gg) within timeout */
+            time_t now = time(NULL);
+            double elapsed = difftime(now, last_g_press_time);
+            
+            /* If second 'g' pressed within G_DOUBLE_TAP_TIMEOUT_MS ms, jump to top */
+            if (elapsed < 0.3) {  /* 300ms timeout */
+                selection->task_index = 0;
+            }
+            /* Store timestamp for next press */
+            last_g_press_time = now;
             break;
         }
         
