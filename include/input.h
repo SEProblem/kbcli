@@ -72,4 +72,38 @@ int read_task_description(char *buffer, size_t size);
  */
 void handle_resize(Board *board);
 
+/**
+ * Switch to next board in list
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ */
+void switch_to_next_board(Board *board, Selection *selection);
+
+/**
+ * Switch to previous board in list
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ */
+void switch_to_previous_board(Board *board, Selection *selection);
+
+/**
+ * Create new board and switch to it
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ */
+void create_new_board(Board *board, Selection *selection);
+
+/**
+ * Parse and execute colon commands
+ * Handles :bn, :bp, :b <name>, :bnew, :bcreate
+ * 
+ * @param board Pointer to the board
+ * @param selection Pointer to current selection
+ * @return 0 if handled normally
+ */
+int handle_colon_command(Board *board, Selection *selection);
+
 #endif /* INPUT_H */

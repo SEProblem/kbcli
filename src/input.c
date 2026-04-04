@@ -15,6 +15,12 @@
 #include "storage.h"
 #include "input.h"
 
+/* External board management state - stores current board name */
+extern char global_current_board_name[256];
+
+/* Forward declarations */
+static void switch_to_board(Board *board, Selection *selection, const char *board_name);
+
 /* Static error message for input failures */
 static char input_error[256] = {0};
 
@@ -550,6 +556,12 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
+    /* Colon command mode - enter command input */
+    if (key == ':') {
+        handle_colon_command(board, selection);
+        return 0;
+    }
+    
     Column *col = &board->columns[selection->column_index];
     int task_count = col->task_count;
     
@@ -902,4 +914,257 @@ void navigation_scroll_down(Selection *selection, Board *board) {
     if (selection->task_index > max_index) {
         selection->task_index = max_index;
     }
+}
+
+/* Current board name for multi-board support */
+char global_current_board_name[256] = "default";
+
+/* Board list cache for :bn/:bp navigation */
+static char** cached_board_list = NULL;
+static int cached_board_count = 0;
+static int cached_current_index = -1;
+
+/**
+ * Refresh the board list cache
+ */
+static void refresh_board_list_cache(void) {
+    /* Free old cache */
+    if (cached_board_list != NULL) {
+        board_list_free(cached_board_list, cached_board_count);
+        cached_board_list = NULL;
+        cached_board_count = 0;
+        cached_current_index = -1;
+    }
+    
+    /* Get new list */
+    board_list_boards(&cached_board_list, &cached_board_count);
+    
+    /* Find current board index */
+    if (global_current_board_name[0] != '\0') {
+        for (int i = 0; i < cached_board_count; i++) {
+            if (cached_board_list[i] != NULL && 
+                strcmp(cached_board_list[i], global_current_board_name) == 0) {
+                cached_current_index = i;
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * Switch to a board by name
+ * Saves current board and loads new one
+ */
+static void switch_to_board(Board *board, Selection *selection, const char *board_name) {
+    if (board == NULL || board_name == NULL) return;
+    
+    /* Save current board first */
+    if (board->filename[0] != '\0') {
+        board_save(board, board->filename);
+    }
+    
+    /* Get boards directory and build new path */
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
+        return;
+    }
+    
+    char file_path[512];
+    snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, board_name);
+    
+    /* Check if board exists */
+    if (!board_exists(board_name)) {
+        return;
+    }
+    
+    /* Free current board tasks */
+    board_free(board);
+    
+    /* Reinitialize board */
+    board_init(board);
+    
+    /* Load new board */
+    board_load(board, file_path);
+    
+    /* Update current board name */
+    strncpy(global_current_board_name, board_name, sizeof(global_current_board_name) - 1);
+    global_current_board_name[sizeof(global_current_board_name) - 1] = '\0';
+    
+    /* Reset selection */
+    selection->column_index = 0;
+    selection->task_index = 0;
+    
+    /* Refresh cache */
+    refresh_board_list_cache();
+}
+
+/**
+ * Switch to next board in list
+ */
+void switch_to_next_board(Board *board, Selection *selection) {
+    /* Refresh cache if needed */
+    if (cached_board_list == NULL) {
+        refresh_board_list_cache();
+    }
+    
+    if (cached_board_count <= 1) return;
+    
+    int next_index = (cached_current_index + 1) % cached_board_count;
+    if (cached_board_list[next_index] != NULL) {
+        switch_to_board(board, selection, cached_board_list[next_index]);
+    }
+}
+
+/**
+ * Switch to previous board in list
+ */
+void switch_to_previous_board(Board *board, Selection *selection) {
+    /* Refresh cache if needed */
+    if (cached_board_list == NULL) {
+        refresh_board_list_cache();
+    }
+    
+    if (cached_board_count <= 1) return;
+    
+    int prev_index = (cached_current_index - 1 + cached_board_count) % cached_board_count;
+    if (cached_board_list[prev_index] != NULL) {
+        switch_to_board(board, selection, cached_board_list[prev_index]);
+    }
+}
+
+/**
+ * Read board name from user input
+ * Uses ncurses input field with prompt
+ */
+static int read_board_name(char *buffer, size_t size) {
+    if (buffer == NULL || size == 0) return -1;
+    
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    buffer[0] = '\0';
+    
+    int prompt_y = height - 2;
+    int prompt_x = 0;
+    
+    mvprintw(prompt_y, prompt_x, "Board name: ");
+    clrtoeol();
+    refresh();
+    
+    move(prompt_y, prompt_x + 12);
+    
+    echo();
+    int ch;
+    size_t pos = 0;
+    
+    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
+        if (ch == 27) {
+            buffer[0] = '\0';
+            noecho();
+            return -1;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127) {
+            if (pos > 0) {
+                pos--;
+                buffer[pos] = '\0';
+                delch();
+            }
+        } else if (ch >= 32 && ch <= 126 && pos < size - 1) {
+            buffer[pos++] = (char)ch;
+            buffer[pos] = '\0';
+        }
+    }
+    
+    noecho();
+    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
+    
+    return (buffer[0] == '\0') ? -1 : 0;
+}
+
+/**
+ * Create new board and switch to it
+ */
+void create_new_board(Board *board, Selection *selection) {
+    char board_name[256] = {0};
+    
+    if (read_board_name(board_name, sizeof(board_name)) != 0) {
+        return;
+    }
+    
+    /* Validate board name */
+    if (board_name[0] == '\0') return;
+    
+    /* Create the board */
+    if (board_create(board_name) != 0) {
+        /* Board might already exist */
+        return;
+    }
+    
+    /* Switch to the new board */
+    switch_to_board(board, selection, board_name);
+}
+
+/**
+ * Parse and execute colon commands
+ * Returns 1 if quit requested, 0 otherwise
+ */
+int handle_colon_command(Board *board, Selection *selection) {
+    /* Read command into buffer */
+    char command[256] = {0};
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    
+    int prompt_y = height - 2;
+    int prompt_x = 0;
+    
+    mvprintw(prompt_y, prompt_x, ":");
+    clrtoeol();
+    refresh();
+    
+    move(prompt_y, prompt_x + 1);
+    
+    echo();
+    int ch;
+    size_t pos = 0;
+    
+    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
+        if (ch == 27) {
+            noecho();
+            return 0;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127) {
+            if (pos > 0) {
+                pos--;
+                command[pos] = '\0';
+                delch();
+            }
+        } else if (ch >= 32 && ch <= 126 && pos < sizeof(command) - 1) {
+            command[pos++] = (char)ch;
+            command[pos] = '\0';
+        }
+    }
+    
+    noecho();
+    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
+    
+    /* Parse commands */
+    if (strcmp(command, "bn") == 0 || strcmp(command, "bnext") == 0) {
+        /* Switch to next board */
+        switch_to_next_board(board, selection);
+    } else if (strcmp(command, "bp") == 0 || strcmp(command, "bprev") == 0) {
+        /* Switch to previous board */
+        switch_to_previous_board(board, selection);
+    } else if (strncmp(command, "b ", 2) == 0) {
+        /* Switch to board by name */
+        char *board_name = command + 2;
+        if (board_exists(board_name)) {
+            switch_to_board(board, selection, board_name);
+        }
+    } else if (strcmp(command, "bnew") == 0 || strcmp(command, "bcreate") == 0) {
+        /* Create new board */
+        create_new_board(board, selection);
+    }
+    /* :blist or :boards would show menu - handled in renderer */
+    
+    return 0;
 }
