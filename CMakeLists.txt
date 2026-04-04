@@ -17,6 +17,7 @@ set(SOURCES
     src/storage.c
     src/renderer.c
     src/input.c
+    src/config.c
 )
 
 # Create executable
