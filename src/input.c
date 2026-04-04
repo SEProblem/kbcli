@@ -253,22 +253,30 @@ int handle_input(Board *board, int key, Selection *selection) {
         }
         
         case 'l': {
-            /* Move selected task to right column (D-10) */
-            if (move_right(board, selection) == 0) {
-                /* Auto-save per D-14 and STO-03 */
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
+            /* Navigate to next column (right) - vim-style navigation */
+            if (selection->column_index < 2) {
+                selection->column_index++;
+                /* Clamp task index to valid range */
+                int new_count = board->columns[selection->column_index].task_count;
+                if (selection->task_index >= new_count && new_count > 0) {
+                    selection->task_index = new_count - 1;
+                } else if (new_count == 0) {
+                    selection->task_index = 0;
                 }
             }
             break;
         }
         
         case 'h': {
-            /* Move selected task to left column (D-09) */
-            if (move_left(board, selection) == 0) {
-                /* Auto-save per D-14 and STO-03 */
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
+            /* Navigate to previous column (left) - vim-style navigation */
+            if (selection->column_index > 0) {
+                selection->column_index--;
+                /* Clamp task index to valid range */
+                int new_count = board->columns[selection->column_index].task_count;
+                if (selection->task_index >= new_count && new_count > 0) {
+                    selection->task_index = new_count - 1;
+                } else if (new_count == 0) {
+                    selection->task_index = 0;
                 }
             }
             break;
