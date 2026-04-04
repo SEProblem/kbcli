@@ -14,15 +14,13 @@ Users can manage their tasks efficiently without leaving the terminal, using fam
 
 - [x] Build TUI interface with ncurses supporting mouse and keyboard input (Phase 1, 2)
 - [x] Implement vim-style navigation (hjkl, d for delete, n for new) (Phase 2)
-- [x] Support multiple boards with in-app switching capability (Phase 1)
+- [x] Support multiple boards with in-app switching capability (Phase 4)
 - [x] Create task management (add, edit, delete, move between columns) (Phase 1)
 - [x] Design markdown-based storage format for persistence (Phase 1)
-- [x] Support both preset 3-column layout and empty custom boards (Phase 1)
+- [x] Support both preset 3-column layout and empty custom boards (Phase 1, 4)
 - [x] Implement task metadata - descriptions and checklists (Phase 3)
-
-### Active
-
-- [ ] Support both preset 3-column layout and empty custom boards
+- [x] Configuration system with customizable keybindings (Phase 4)
+- [x] Configurable board directory (Phase 4)
 
 ### Out of Scope
 
@@ -87,4 +85,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Create, edit, move, and delete tasks via keyboard or mouse
 
 ---
-*Last updated: 2026-04-04 after Phase 3 complete*
+*Last updated: 2026-04-04 after Phase 4 complete*
