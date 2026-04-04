@@ -15,6 +15,7 @@
 #include "storage.h"
 #include "renderer.h"
 #include "input.h"
+#include "config.h"
 
 /* External board management state - stores current board name */
 extern char global_current_board_name[256];
@@ -565,6 +566,33 @@ int handle_input(Board *board, int key, Selection *selection) {
     
     Column *col = &board->columns[selection->column_index];
     int task_count = col->task_count;
+    
+    /* Convert key to char for configurable keybindings */
+    char key_char = (char)key;
+    
+    /* Check for configurable keybindings */
+    int is_configurable_key = 0;
+    
+    /* Map configurable keys to their actions */
+    if (key_char == key_create) {
+        key = 'o';  /* Remap to create action */
+        is_configurable_key = 1;
+    } else if (key_char == key_delete) {
+        key = 'd';  /* Remap to delete action */
+        is_configurable_key = 1;
+    } else if (key_char == key_up) {
+        key = 'k';  /* Remap to up action */
+        is_configurable_key = 1;
+    } else if (key_char == key_down) {
+        key = 'j';  /* Remap to down action */
+        is_configurable_key = 1;
+    } else if (key_char == key_left) {
+        key = 'h';  /* Remap to left action */
+        is_configurable_key = 1;
+    } else if (key_char == key_right) {
+        key = 'l';  /* Remap to right action */
+        is_configurable_key = 1;
+    }
     
     switch (key) {
         /* 'o' - create task below current position (D-05) */

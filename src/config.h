@@ -9,6 +9,7 @@
 #define CONFIG_H
 
 #include <stddef.h>
+#include <ncurses.h>
 
 /* Maximum path length */
 #define MAX_PATH 512
@@ -93,5 +94,13 @@ const char* config_get_default_keybindings(void);
  * @param config Config structure to initialize
  */
 void config_init_defaults(Config *config);
+
+/* External key mappings - used by input handler */
+extern char key_up;
+extern char key_down;
+extern char key_left;
+extern char key_right;
+extern char key_create;
+extern char key_delete;
 
 #endif /* CONFIG_H */
