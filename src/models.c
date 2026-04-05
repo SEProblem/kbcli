@@ -476,15 +476,12 @@ int move_up(Board *board, Selection *selection) {
     
     if (current == NULL || prev == NULL) return -1;
     
-    /* Get task before prev (for swap) */
+    /* Get task before prev (for swap) — walk from head until walker reaches prev */
     Task *before_prev = NULL;
-    Task *temp = col->tasks;
-    int search_idx = selection->task_index - 2;
-    
-    while (temp != NULL && search_idx > 0) {
-        before_prev = temp;
-        temp = temp->next;
-        search_idx--;
+    Task *walker = col->tasks;
+    while (walker != NULL && walker != prev) {
+        before_prev = walker;
+        walker = walker->next;
     }
     
     /* Swap current and prev */
@@ -533,12 +530,12 @@ int move_down(Board *board, Selection *selection) {
     
     next_task = selected_task->next;
     
-    /* Swap positions */
-    Task *before_selected = col->tasks;
-    int pos = selection->task_index - 1;
-    while (before_selected != NULL && pos > 0) {
-        before_selected = before_selected->next;
-        pos--;
+    /* Find node before selected_task — walk from head until walker reaches selected_task */
+    Task *before_selected = NULL;
+    Task *walker = col->tasks;
+    while (walker != NULL && walker != selected_task) {
+        before_selected = walker;
+        walker = walker->next;
     }
     
     if (before_selected == NULL) {
