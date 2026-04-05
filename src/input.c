@@ -512,7 +512,7 @@ int handle_input(Board *board, int key, Selection *selection) {
     }
     
     /* Enter key - open card popup (D-01) */
-    if (key == KEY_ENTER) {
+    if (key == KEY_ENTER || key == '\n') {
         Column *col = &board->columns[selection->column_index];
         if (col->task_count > 0) {
             board->app_mode = MODE_CARD_POPUP;
