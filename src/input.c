@@ -859,9 +859,14 @@ void handle_mouse_event(Board *board, Selection *selection) {
     MEVENT event;
     
     if (getmouse(&event) == OK) {
-        /* Handle button 1 press - click to select task */
-        if (event.bstate & BUTTON1_PRESSED || 
-            event.bstate & BUTTON1_CLICKED) {
+        /* Handle button 1 double-click - open card popup (NAV-05); tested first
+         * because ncurses may set both DOUBLE and PRESSED on a double-click */
+        if (event.bstate & BUTTON1_DOUBLE_CLICKED) {
+            navigation_select_task_at(board, selection, event.y, event.x);
+            board->app_mode = MODE_CARD_POPUP;
+            popup_active_field = 0;
+        } else if (event.bstate & BUTTON1_PRESSED || 
+                   event.bstate & BUTTON1_CLICKED) {
             /* Navigate to task at clicked position */
             navigation_select_task_at(board, selection, event.y, event.x);
         }
@@ -890,26 +895,38 @@ void handle_mouse_event(Board *board, Selection *selection) {
 void navigation_select_task_at(Board *board, Selection *selection, int screen_y, int screen_x) {
     if (board == NULL || selection == NULL) return;
     
-    /* Calculate which column was clicked */
-    int col_width = COLS / 3;
-    int col = screen_x / col_width;
-    if (col > 2) col = 2;
-    if (col < 0) col = 0;
+    /* Mirror render_board geometry exactly - NAV-05 */
+    int num_columns = 3;
+    int border_total = (num_columns - 1) * 1;  /* BORDER_WIDTH=1 */
+    int col_width = (COLS - border_total) / num_columns;
+    if (col_width < 20) col_width = 20;  /* MIN_COLUMN_WIDTH */
+    int total_width = (col_width * num_columns) + border_total;
+    int start_x = (COLS - total_width) / 2;
+    if (start_x < 0) start_x = 0;
     
-    /* Get the column */
-    Column *column = &board->columns[col];
+    /* Detect which column was clicked */
+    int clicked_col = -1;
+    for (int i = 0; i < num_columns; i++) {
+        int col_start = start_x + i * (col_width + 1);
+        if (screen_x >= col_start && screen_x < col_start + col_width) {
+            clicked_col = i;
+            break;
+        }
+    }
+    if (clicked_col < 0) return;  /* click landed on a border or outside */
     
-    /* Calculate which task in the column based on screen position */
-    int header_height = 2;  /* Column header rows */
-    int task_idx = (screen_y - header_height);
+    /* Task area starts at row 3 (header_y=1 + HEADER_HEIGHT=2) */
+    int task_y_base = 3;
+    if (screen_y < task_y_base) return;  /* click in header area */
+    int task_idx = get_scroll_offset(clicked_col) + (screen_y - task_y_base);
     
-    /* Clamp to valid range */
+    /* Get the column and clamp task index */
+    Column *column = &board->columns[clicked_col];
+    if (column->task_count == 0) return;
     if (task_idx < 0) task_idx = 0;
     if (task_idx >= column->task_count) task_idx = column->task_count - 1;
-    if (column->task_count == 0) task_idx = 0;
     
-    /* Update selection */
-    selection->column_index = col;
+    selection->column_index = clicked_col;
     selection->task_index = task_idx;
 }
 
@@ -927,6 +944,7 @@ void navigation_scroll_up(Selection *selection) {
     if (selection->task_index < 0) {
         selection->task_index = 0;
     }
+    clamp_scroll(selection);
 }
 
 /**
@@ -947,6 +965,7 @@ void navigation_scroll_down(Selection *selection, Board *board) {
     if (selection->task_index > max_index) {
         selection->task_index = max_index;
     }
+    clamp_scroll(selection);
 }
 
 /* Current board name for multi-board support */

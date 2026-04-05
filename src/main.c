@@ -87,6 +87,7 @@ int main(int argc, char *argv[]) {
     
     /* Enable mouse support - NAV-05, NAV-06 per D-09 */
     mousemask(ALL_MOUSE_EVENTS, NULL);
+    mouseinterval(166);  /* double-click detection window in ms - NAV-05 */
     
     /* Initialize renderer state */
     renderer_init();
