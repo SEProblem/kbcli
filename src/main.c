@@ -41,13 +41,16 @@ static void event_loop(void) {
     
     while (running) {
         /* Render based on current mode */
-        if (global_board.app_mode == MODE_DESCRIPTION_VIEW ||
-            global_board.app_mode == MODE_DESCRIPTION_EDIT) {
+        if (global_board.app_mode == MODE_HELP) {
+            render_board(&global_board, &current_selection);
+            render_help_popup();
+        } else if (global_board.app_mode == MODE_DESCRIPTION_VIEW ||
+                   global_board.app_mode == MODE_DESCRIPTION_EDIT) {
             /* Render description popup */
             render_description_popup(&global_board, &current_selection);
         } else {
             /* Render the board (shows current state) */
-            render_board(&global_board);
+            render_board(&global_board, &current_selection);
         }
         
         /* Get user input */

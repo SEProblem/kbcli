@@ -365,63 +365,32 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
-    /* MODE_DESCRIPTION_EDIT: edit description */
+    /* MODE_DESCRIPTION_EDIT: prompt for description immediately */
     if (board->app_mode == MODE_DESCRIPTION_EDIT) {
-        /* First entry to edit mode - prompt for description */
-        static int just_entered = 1;
-        
-        if (just_entered) {
-            just_entered = 0;
-            
-            /* Get the selected task */
-            Column *col = &board->columns[selection->column_index];
-            Task *task = col->tasks;
-            int idx = selection->task_index;
-            while (task != NULL && idx > 0) {
-                task = task->next;
-                idx--;
-            }
-            
-            if (task != NULL) {
-                /* Read description from user */
-                char desc[MAX_DESC_LEN];
-                strncpy(desc, task->description, sizeof(desc) - 1);
-                desc[sizeof(desc) - 1] = '\0';
-                
-                if (read_task_description(desc, sizeof(desc)) == 0) {
-                    /* Copy description to task */
-                    strncpy(task->description, desc, sizeof(task->description) - 1);
-                    task->description[sizeof(task->description) - 1] = '\0';
-                    task->desc_len = strlen(task->description);
-                    
-                    /* Auto-save after editing description */
-                    if (board->filename[0] != '\0') {
-                        board_save(board, board->filename);
-                    }
+        Column *col = &board->columns[selection->column_index];
+        Task *task = col->tasks;
+        int idx = selection->task_index;
+        while (task != NULL && idx > 0) {
+            task = task->next;
+            idx--;
+        }
+
+        if (task != NULL) {
+            char desc[MAX_DESC_LEN];
+            strncpy(desc, task->description, sizeof(desc) - 1);
+            desc[sizeof(desc) - 1] = '\0';
+
+            if (read_task_description(desc, sizeof(desc)) == 0) {
+                strncpy(task->description, desc, sizeof(task->description) - 1);
+                task->description[sizeof(task->description) - 1] = '\0';
+                task->desc_len = strlen(task->description);
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
                 }
             }
-            
-            board->app_mode = MODE_NORMAL;
-            return 0;
         }
-        
-        /* Esc cancels editing */
-        if (key == 27) {  /* Escape - cancel and close */
-            just_entered = 1;
-            board->app_mode = MODE_NORMAL;
-            return 0;
-        }
-        /* Enter saves and closes */
-        if (key == '\n' || key == KEY_ENTER) {
-            just_entered = 1;
-            /* Description was edited, save to file */
-            if (board->filename[0] != '\0') {
-                board_save(board, board->filename);
-            }
-            board->app_mode = MODE_NORMAL;
-            return 0;
-        }
-        /* Pass through for text input in description edit mode */
+
+        board->app_mode = MODE_NORMAL;
         return 0;
     }
     
@@ -524,8 +493,14 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
+    /* MODE_HELP: any key closes the help overlay */
+    if (board->app_mode == MODE_HELP) {
+        board->app_mode = MODE_NORMAL;
+        return 0;
+    }
+
     /* MODE_NORMAL: route keys for navigation and commands */
-    
+
     /* 'i' - also open description popup (D-01) */
     if (key == 'i') {
         /* Check if there's a selected task */
@@ -558,6 +533,12 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
+    /* '?' - show help overlay */
+    if (key == '?') {
+        board->app_mode = MODE_HELP;
+        return 0;
+    }
+
     /* Colon command mode - enter command input */
     if (key == ':') {
         handle_colon_command(board, selection);
@@ -811,6 +792,26 @@ int handle_input(Board *board, int key, Selection *selection) {
             break;
         }
         
+        /* 'H' (Shift+h) - move task to left column */
+        case 'H': {
+            if (move_left(board, selection) == 0) {
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            break;
+        }
+
+        /* 'L' (Shift+l) - move task to right column */
+        case 'L': {
+            if (move_right(board, selection) == 0) {
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
+                }
+            }
+            break;
+        }
+
         /* 'J' (Shift+j) - move task up within column (D-11) */
         case 'J': {
             if (move_up(board, selection) == 0) {
@@ -821,7 +822,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             }
             break;
         }
-        
+
         /* 'K' (Shift+k) - move task down within column (D-11) */
         case 'K': {
             if (move_down(board, selection) == 0) {
@@ -1188,6 +1189,8 @@ int handle_colon_command(Board *board, Selection *selection) {
         char *board_name = command + 2;
         if (board_exists(board_name)) {
             switch_to_board(board, selection, board_name);
+        } else {
+            snprintf(input_error, sizeof(input_error), "No board named \"%s\"", board_name);
         }
     } else if (strcmp(command, "bnew") == 0 || strcmp(command, "bcreate") == 0) {
         /* Create new board */

@@ -14,8 +14,10 @@
 #include "renderer.h"
 #include "storage.h"
 
-/* Global selection state */
-static Selection global_selection = {0, 0};
+/* Access current board name and error state from input.c */
+extern char global_current_board_name[256];
+extern const char* input_get_error(void);
+extern void input_clear_error(void);
 
 /* Scroll offsets for each column (for column-local scrolling) */
 static int scroll_offsets[3] = {0, 0, 0};
@@ -33,27 +35,10 @@ static int scroll_offsets[3] = {0, 0, 0};
 #define STATUS_BAR_HEIGHT 1
 
 void renderer_init(void) {
-    /* Initialize global selection */
-    global_selection.column_index = 0;
-    global_selection.task_index = 0;
-    
     /* Initialize scroll offsets */
     scroll_offsets[0] = 0;
     scroll_offsets[1] = 0;
     scroll_offsets[2] = 0;
-}
-
-Selection* get_selection(void) {
-    return &global_selection;
-}
-
-void set_selection(int column_index, int task_index) {
-    if (column_index >= 0 && column_index < 3) {
-        global_selection.column_index = column_index;
-    }
-    if (task_index >= 0) {
-        global_selection.task_index = task_index;
-    }
 }
 
 int get_scroll_offset(int column_index) {
@@ -177,7 +162,7 @@ void render_column(Column *col, int start_x, int width,
     /* Render visible tasks */
     while (task != NULL && task_y < max_y - 1) {
         /* Check if this task is selected */
-        int is_selected = (selected_col == 1 && sel_task_index == visible_index);
+        int is_selected = (selected_col && sel_task_index == visible_index);
         
         /* Render task */
         render_task(task, task_y, start_x + 2, width - 4, is_selected, detailed_view);
@@ -209,7 +194,7 @@ void render_column(Column *col, int start_x, int width,
     }
 }
 
-void render_board(Board *board) {
+void render_board(Board *board, Selection *sel) {
     if (board == NULL) return;
     
     int height, width;
@@ -242,73 +227,73 @@ void render_board(Board *board) {
         int col_start = start_x + (i * (col_width + BORDER_WIDTH));
         
         /* Get selection for this column */
-        int is_this_column_selected = (global_selection.column_index == i);
+        int is_this_column_selected = (sel->column_index == i);
         
         render_column(&board->columns[i], col_start, col_width,
                       is_this_column_selected, 
-                      is_this_column_selected ? global_selection.task_index : -1,
+                      is_this_column_selected ? sel->task_index : -1,
                       scroll_offsets[i],
                       board->detailed_view);
     }
     
     /* Draw status bar at bottom */
     int status_y = height - 1;
-    mvhline(status_y, 0, 0, width);
-    
-    /* Show help text and selection info */
-    char status_msg[256];
-    Task *sel_task = NULL;
-    if (global_selection.task_index < board->columns[global_selection.column_index].task_count) {
-        sel_task = board->columns[global_selection.column_index].tasks;
-        int idx = global_selection.task_index;
-        while (sel_task != NULL && idx > 0) {
-            sel_task = sel_task->next;
-            idx--;
-        }
+    mvhline(status_y, 0, ' ', width);
+
+    /* Mode indicator (right-aligned) */
+    const char *mode_str = "NORMAL";
+    if (board->app_mode == MODE_INSERT)           mode_str = "INSERT";
+    else if (board->app_mode == MODE_CHECKLIST)   mode_str = "CHECKLIST";
+    else if (board->app_mode == MODE_DESCRIPTION_VIEW ||
+             board->app_mode == MODE_DESCRIPTION_EDIT) mode_str = "EDIT";
+    int mode_len = (int)strlen(mode_str);
+    if (width - mode_len - 1 > 0) {
+        mvprintw(status_y, width - mode_len - 1, "%s", mode_str);
     }
-    
-    if (sel_task != NULL) {
-        snprintf(status_msg, sizeof(status_msg), 
-                 "[%s] Selected: %s | 'o':new-below 'O':new-above 'd':delete | 'q':quit",
-                 board->columns[global_selection.column_index].name,
-                 sel_task->title);
+
+    /* Check for error message; show it instead of normal hints */
+    const char *err = input_get_error();
+    if (err != NULL) {
+        char errbuf[256];
+        snprintf(errbuf, sizeof(errbuf), " ! %s", err);
+        if ((int)strlen(errbuf) > width - mode_len - 2)
+            errbuf[width - mode_len - 2] = '\0';
+        attron(A_BOLD);
+        mvprintw(status_y, 0, "%s", errbuf);
+        attroff(A_BOLD);
+        input_clear_error();
     } else {
-        snprintf(status_msg, sizeof(status_msg),
-                 "[%s] No selection | 'o':new-below 'O':new-above 'd':delete | 'q':quit",
-                 board->columns[global_selection.column_index].name);
-    }
-    
-    /* Truncate status message if too long */
-    if ((int)strlen(status_msg) > width - 1) {
-        status_msg[width - 1] = '\0';
-    }
-    
-    mvprintw(status_y, 0, "%s", status_msg);
-    
-    /* Show view mode indicator (Compact or Detailed) */
-    int view_mode_x = width - 18;
-    if (view_mode_x > 0) {
-        if (board->detailed_view) {
-            mvprintw(status_y, view_mode_x, "[Detailed View]");
+        /* Normal status: [board] [column] task | key hints */
+        Task *sel_task = NULL;
+        if (sel->task_index < board->columns[sel->column_index].task_count) {
+            sel_task = board->columns[sel->column_index].tasks;
+            int idx = sel->task_index;
+            while (sel_task != NULL && idx > 0) {
+                sel_task = sel_task->next;
+                idx--;
+            }
+        }
+
+        char status_msg[512];
+        if (sel_task != NULL) {
+            snprintf(status_msg, sizeof(status_msg),
+                     " [%s] %s | %s | o:new d:del H/L:move ?:help",
+                     global_current_board_name,
+                     board->columns[sel->column_index].name,
+                     sel_task->title);
         } else {
-            mvprintw(status_y, view_mode_x, "[Compact View]");
+            snprintf(status_msg, sizeof(status_msg),
+                     " [%s] %s | (empty) | o:new ?:help",
+                     global_current_board_name,
+                     board->columns[sel->column_index].name);
         }
-    }
-    
-    /* Show mode indicator per MOD-05 (Normal mode shows visual indicators) */
-    if (board->app_mode == MODE_INSERT) {
-        /* vim-style INSERT indicator at right side of status bar */
-        int insert_x = width - 12;  /* "-- INSERT --" is 12 chars */
-        if (insert_x > 0) {
-            mvprintw(status_y, insert_x, "-- INSERT --");
-        }
-    }
-    /* In Normal mode, show "NORMAL" indicator (optional - can be empty) */
-    else {
-        int normal_x = width - 8;
-        if (normal_x > 0) {
-            mvprintw(status_y, normal_x, "NORMAL");
-        }
+
+        /* Truncate so it doesn't overlap the mode indicator */
+        int max_len = width - mode_len - 2;
+        if (max_len > 0 && (int)strlen(status_msg) > max_len)
+            status_msg[max_len] = '\0';
+
+        mvprintw(status_y, 0, "%s", status_msg);
     }
     
     /* Refresh to show all changes (per PITFALLS.md) */
@@ -607,6 +592,99 @@ char* show_board_list_menu(void) {
     
     /* Cleanup */
     board_list_free(boards, count);
-    
+
     return result;
+}
+
+/**
+ * Render help popup with all keybindings
+ * Press any key to close
+ */
+void render_help_popup(void) {
+    int height, width;
+    getmaxyx(stdscr, height, width);
+
+    static const char *lines[] = {
+        "  Navigation",
+        "  h / l  or  \xe2\x86\x90 / \xe2\x86\x92   Move between columns",
+        "  j / k  or  \xe2\x86\x93 / \xe2\x86\x91   Move between tasks",
+        "  Tab / Shift+Tab      Next / prev column",
+        "  gg                   Jump to top of column",
+        "  G                    Jump to bottom of column",
+        "",
+        "  Task operations",
+        "  o / O                New task below / above",
+        "  d / x                Delete selected task",
+        "  H / L                Move task left / right (prev/next stage)",
+        "  J / K                Reorder task up / down",
+        "",
+        "  Task details",
+        "  i  or  Enter         Open description popup",
+        "  v                    Toggle detailed view",
+        "  c  (in detail view)  Enter checklist mode",
+        "  Space  (checklist)   Toggle checklist item",
+        "  N  (checklist)       Add checklist item",
+        "",
+        "  Boards",
+        "  :bn / :bp            Next / prev board",
+        "  :bnew                Create new board",
+        "  :blist               Show board picker",
+        "  :b <name>            Switch to named board",
+        "",
+        "  q                   Quit",
+        "  ?                   Show this help",
+        "",
+        "  Press any key to close",
+    };
+    int num_lines = (int)(sizeof(lines) / sizeof(lines[0]));
+
+    int popup_width = 54;
+    if (popup_width > width - 4) popup_width = width - 4;
+    int popup_height = num_lines + 4;
+    if (popup_height > height - 2) popup_height = height - 2;
+
+    int popup_y = (height - popup_height) / 2;
+    int popup_x = (width - popup_width) / 2;
+    if (popup_y < 1) popup_y = 1;
+    if (popup_x < 1) popup_x = 1;
+
+    /* Clear popup area */
+    for (int y = popup_y; y < popup_y + popup_height; y++) {
+        mvhline(y, popup_x, ' ', popup_width);
+    }
+
+    /* Border */
+    mvaddch(popup_y, popup_x, ACS_ULCORNER);
+    mvaddch(popup_y, popup_x + popup_width - 1, ACS_URCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x, ACS_LLCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x + popup_width - 1, ACS_LRCORNER);
+    for (int x = popup_x + 1; x < popup_x + popup_width - 1; x++) {
+        mvaddch(popup_y, x, ACS_HLINE);
+        mvaddch(popup_y + popup_height - 1, x, ACS_HLINE);
+    }
+    for (int y = popup_y + 1; y < popup_y + popup_height - 1; y++) {
+        mvaddch(y, popup_x, ACS_VLINE);
+        mvaddch(y, popup_x + popup_width - 1, ACS_VLINE);
+    }
+
+    /* Title */
+    const char *title = " Keybindings ";
+    int title_x = popup_x + (popup_width - (int)strlen(title)) / 2;
+    attron(A_BOLD);
+    mvprintw(popup_y, title_x, "%s", title);
+    attroff(A_BOLD);
+
+    /* Content lines */
+    int content_y = popup_y + 2;
+    int max_x = popup_width - 3;
+    for (int i = 0; i < num_lines && content_y < popup_y + popup_height - 1; i++, content_y++) {
+        char truncated[128];
+        strncpy(truncated, lines[i], sizeof(truncated) - 1);
+        truncated[sizeof(truncated) - 1] = '\0';
+        if ((int)strlen(truncated) > max_x)
+            truncated[max_x] = '\0';
+        mvprintw(content_y, popup_x + 2, "%s", truncated);
+    }
+
+    refresh();
 }

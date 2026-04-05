@@ -23,7 +23,8 @@ typedef enum {
     MODE_INSERT,
     MODE_DESCRIPTION_VIEW,
     MODE_DESCRIPTION_EDIT,
-    MODE_CHECKLIST
+    MODE_CHECKLIST,
+    MODE_HELP
 } AppMode;
 
 /**

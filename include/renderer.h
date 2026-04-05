@@ -24,8 +24,9 @@ typedef struct Selection {
  * Clears screen and renders all 3 columns with terminal-adaptive widths
  * 
  * @param board Pointer to the board to render
+ * @param sel   Pointer to the current selection state
  */
-void render_board(Board *board);
+void render_board(Board *board, Selection *sel);
 
 /**
  * Render a single column
@@ -65,21 +66,6 @@ void render_task(Task *task, int y, int x, int width, int selected, int detailed
  * @param selected 1 if task is selected, 0 otherwise
  */
 void highlight_selected(int selected);
-
-/**
- * Get the current selection state
- * Returns pointer to global selection
- */
-Selection* get_selection(void);
-
-/**
- * Set the selection state
- * Updates which task is selected
- * 
- * @param column_index New column index
- * @param task_index New task index
- */
-void set_selection(int column_index, int task_index);
 
 /**
  * Initialize renderer state
@@ -143,5 +129,12 @@ void render_board_list(char **board_names, int count, int selected);
  * Returns selected board name (caller must free), or NULL on cancel
  */
 char* show_board_list_menu(void);
+
+/**
+ * Render help popup overlay
+ * Displays all keybindings in a centered overlay
+ * Press any key to close
+ */
+void render_help_popup(void);
 
 #endif /* RENDERER_H */
