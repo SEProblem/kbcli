@@ -27,7 +27,9 @@ static void switch_to_board(Board *board, Selection *selection, const char *boar
 static char input_error[256] = {0};
 
 /* Timestamp for double-g detection (jump to top) */
-static time_t last_g_press_time = 0;
+/* Uses CLOCK_MONOTONIC via timespec for sub-second precision — time_t has only
+ * 1-second resolution, which caused false triggers within the same second. */
+static struct timespec last_g_press_time = {0, 0};
 #define G_DOUBLE_TAP_TIMEOUT_MS 300
 
 /* External board filename for auto-save */
@@ -320,6 +322,29 @@ void handle_resize(Board *board) {
     
     /* Redraw everything */
     renderer_redraw_all();
+}
+
+/**
+ * Clamp the scroll offset for the current column so that sel->task_index
+ * remains visible on screen.
+ *
+ * visible_height = height - 5 because render_column starts tasks at task_y=3
+ * and stops before max_y-1 (= height-2), giving (height-2) - 3 = height-5
+ * visible rows.  Keeping this comment here avoids re-deriving the geometry.
+ */
+static void clamp_scroll(Selection *sel) {
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    (void)width;  /* unused but getmaxyx requires both */
+    int visible_height = height - 5; /* matches render_column: task_y=3, max_y=height-2, stop < max_y-1 */
+    if (visible_height < 1) visible_height = 1;
+    int col_i = sel->column_index;
+    int offset = get_scroll_offset(col_i);
+    if (sel->task_index < offset) {
+        set_scroll_offset(col_i, sel->task_index);
+    } else if (sel->task_index >= offset + visible_height) {
+        set_scroll_offset(col_i, sel->task_index - visible_height + 1);
+    }
 }
 
 int handle_input(Board *board, int key, Selection *selection) {
@@ -648,6 +673,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             if (selection->task_index < task_count - 1) {
                 selection->task_index++;
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -657,6 +683,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             if (selection->task_index > 0) {
                 selection->task_index--;
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -673,6 +700,7 @@ int handle_input(Board *board, int key, Selection *selection) {
                     selection->task_index = 0;
                 }
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -688,6 +716,7 @@ int handle_input(Board *board, int key, Selection *selection) {
                     selection->task_index = 0;
                 }
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -703,6 +732,7 @@ int handle_input(Board *board, int key, Selection *selection) {
                     selection->task_index = 0;
                 }
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -718,6 +748,7 @@ int handle_input(Board *board, int key, Selection *selection) {
                     selection->task_index = 0;
                 }
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -730,6 +761,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             } else if (new_count == 0) {
                 selection->task_index = 0;
             }
+            clamp_scroll(selection);
             break;
         }
         
@@ -742,27 +774,34 @@ int handle_input(Board *board, int key, Selection *selection) {
             } else if (new_count == 0) {
                 selection->task_index = 0;
             }
+            clamp_scroll(selection);
             break;
         }
         
         /* 'g' - jump to first task (top of column), supports double-tap gg */
         case 'g': {
-            /* Check for double-tap (gg) within timeout */
-            time_t now = time(NULL);
-            double elapsed = difftime(now, last_g_press_time);
-            
-            /* If second 'g' pressed within G_DOUBLE_TAP_TIMEOUT_MS ms, jump to top */
-            if (elapsed < 0.3) {  /* 300ms timeout */
+            /* Use CLOCK_MONOTONIC for millisecond precision; time_t has only
+             * 1-second resolution and caused false triggers / missed presses. */
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            long elapsed_ms = (now.tv_sec - last_g_press_time.tv_sec) * 1000L
+                            + (now.tv_nsec - last_g_press_time.tv_nsec) / 1000000L;
+            /* elapsed_ms > 0 guards the pathological same-nanosecond case */
+            if (elapsed_ms > 0 && elapsed_ms < G_DOUBLE_TAP_TIMEOUT_MS) {
                 selection->task_index = 0;
+                clamp_scroll(selection);
             }
             /* Store timestamp for next press */
             last_g_press_time = now;
+            /* Re-validate offset after any prior resize even for a single 'g' */
+            clamp_scroll(selection);
             break;
         }
         
         /* 'G' - jump to last task (bottom of column) */
         case 'G': {
             selection->task_index = (task_count > 0) ? task_count - 1 : 0;
+            clamp_scroll(selection);
             break;
         }
         
