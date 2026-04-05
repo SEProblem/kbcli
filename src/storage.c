@@ -70,11 +70,11 @@ static int parse_column_header(const char *line) {
     
     /* Match against known column names */
     if (strcmp(name, COLUMN_TODO) == 0) return 0;
-    if (strcmp(name, COLUMN_IN_PROGRESS) == 1) return 1;
-    if (strcmp(name, COLUMN_DONE) == 2) return 2;
+    if (strcmp(name, COLUMN_IN_PROGRESS) == 0) return 1;
+    if (strcmp(name, COLUMN_DONE) == 0) return 2;
     if (strcmp(name, "To Do") == 0) return 0;
-    if (strcmp(name, "In Progress") == 1) return 1;
-    if (strcmp(name, "Done") == 2) return 2;
+    if (strcmp(name, "In Progress") == 0) return 1;
+    if (strcmp(name, "Done") == 0) return 2;
     
     return -1;  /* Unknown column */
 }
@@ -166,18 +166,28 @@ int parse_markdown(Board *board, const char *filepath) {
             if (last_task != NULL && strncmp(line, "- [", 4) == 0) {
                 ChecklistItem *item = parse_checklist_line(line);
                 if (item != NULL) {
-                    /* Add to beginning of checklist list */
-                    item->next = last_task->checklist;
-                    last_task->checklist = item;
+                    /* Append to end of checklist list (preserves file order) */
+                    if (last_task->checklist == NULL) {
+                        last_task->checklist = item;
+                    } else {
+                        ChecklistItem *ctail = last_task->checklist;
+                        while (ctail->next != NULL) ctail = ctail->next;
+                        ctail->next = item;
+                    }
                     continue;
                 }
             }
             
             Task *task = parse_task_line(line);
             if (task != NULL) {
-                /* Add task to column */
-                task->next = board->columns[current_column].tasks;
-                board->columns[current_column].tasks = task;
+                /* Append task to end of column list (preserves file order) */
+                if (board->columns[current_column].tasks == NULL) {
+                    board->columns[current_column].tasks = task;
+                } else {
+                    Task *tail = board->columns[current_column].tasks;
+                    while (tail->next != NULL) tail = tail->next;
+                    tail->next = task;
+                }
                 board->columns[current_column].task_count++;
                 last_task = task;
             } else if (strncmp(line, "## ", 3) != 0 && line[0] != '\n' && line[0] != '\r') {

@@ -91,9 +91,14 @@ int checklist_item_add(Task *task, const char *text) {
     ChecklistItem *new_item = checklist_item_create(text);
     if (new_item == NULL) return -1;
     
-    /* Add to beginning of list */
-    new_item->next = task->checklist;
-    task->checklist = new_item;
+    /* Append to end of list (preserves insertion order) */
+    if (task->checklist == NULL) {
+        task->checklist = new_item;
+    } else {
+        ChecklistItem *tail = task->checklist;
+        while (tail->next != NULL) tail = tail->next;
+        tail->next = new_item;
+    }
     
     return 0;
 }
