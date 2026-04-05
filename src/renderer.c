@@ -13,6 +13,7 @@
 #include "kanban.h"
 #include "renderer.h"
 #include "storage.h"
+#include "models.h"
 
 /* Access current board name and error state from input.c */
 extern char global_current_board_name[256];
@@ -244,6 +245,7 @@ void render_board(Board *board, Selection *sel) {
     const char *mode_str = "NORMAL";
     if (board->app_mode == MODE_INSERT)           mode_str = "INSERT";
     else if (board->app_mode == MODE_CHECKLIST)   mode_str = "CHECKLIST";
+    else if (board->app_mode == MODE_CARD_POPUP)  mode_str = "POPUP";
     else if (board->app_mode == MODE_DESCRIPTION_VIEW ||
              board->app_mode == MODE_DESCRIPTION_EDIT) mode_str = "EDIT";
     int mode_len = (int)strlen(mode_str);
@@ -685,6 +687,187 @@ void render_help_popup(void) {
             truncated[max_x] = '\0';
         mvprintw(content_y, popup_x + 2, "%s", truncated);
     }
+
+    refresh();
+}
+
+/**
+ * Render card popup overlay for in-place editing
+ * Displays title, description, and checklist in a centered overlay.
+ * active_field: 0=title, 1=description, 2=checklist
+ */
+void render_card_popup(Board *board, Selection *selection, int active_field) {
+    if (board == NULL || selection == NULL) return;
+
+    /* Draw the board underneath the popup first */
+    render_board(board, selection);
+
+    int height, width;
+    getmaxyx(stdscr, height, width);
+
+    /* Get the selected task */
+    Column *col = &board->columns[selection->column_index];
+    Task *task = col->tasks;
+    int idx = selection->task_index;
+    while (task != NULL && idx > 0) {
+        task = task->next;
+        idx--;
+    }
+    if (task == NULL) return;
+
+    /* Calculate popup dimensions */
+    int popup_width = (int)(width * 0.7);
+    if (popup_width < 44)        popup_width = 44;
+    if (popup_width > width - 4) popup_width = width - 4;
+
+    int cl_count = checklist_count(task);
+    int cl_rows  = (cl_count > 0) ? cl_count : 1;
+
+    /*
+     * Height breakdown:
+     *   1  top border
+     *   1  title row
+     *   1  blank gap
+     *   1  desc header
+     *   3  desc content rows
+     *   1  divider
+     *   1  checklist header
+     *   cl_rows  checklist items (min 1 for "(no items)")
+     *   2  checklist nav hint area
+     *   1  key hint footer
+     *   1  bottom border
+     * = 13 + cl_rows
+     */
+    int popup_height = 13 + cl_rows;
+    if (popup_height > height - 4) popup_height = height - 4;
+
+    int popup_y = (height - popup_height) / 2;
+    int popup_x = (width  - popup_width)  / 2;
+    if (popup_y < 1) popup_y = 1;
+    if (popup_x < 1) popup_x = 1;
+
+    /* Clear popup background area */
+    for (int r = popup_y; r < popup_y + popup_height; r++) {
+        mvhline(r, popup_x, ' ', popup_width);
+    }
+
+    /* Draw border */
+    mvaddch(popup_y, popup_x, ACS_ULCORNER);
+    mvaddch(popup_y, popup_x + popup_width - 1, ACS_URCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x, ACS_LLCORNER);
+    mvaddch(popup_y + popup_height - 1, popup_x + popup_width - 1, ACS_LRCORNER);
+    for (int x = popup_x + 1; x < popup_x + popup_width - 1; x++) {
+        mvaddch(popup_y, x, ACS_HLINE);
+        mvaddch(popup_y + popup_height - 1, x, ACS_HLINE);
+    }
+    for (int y = popup_y + 1; y < popup_y + popup_height - 1; y++) {
+        mvaddch(y, popup_x, ACS_VLINE);
+        mvaddch(y, popup_x + popup_width - 1, ACS_VLINE);
+    }
+
+    /* Row 1: Title */
+    int title_row = popup_y + 1;
+    mvprintw(title_row, popup_x + 1, " Card: ");
+    int title_val_x = popup_x + 8;
+    int title_val_w = popup_width - 10;
+    if (title_val_w < 1) title_val_w = 1;
+    char title_display[256];
+    strncpy(title_display, task->title, sizeof(title_display) - 1);
+    title_display[sizeof(title_display) - 1] = '\0';
+    if ((int)strlen(title_display) > title_val_w)
+        title_display[title_val_w] = '\0';
+    if (active_field == 0) attron(A_REVERSE);
+    mvprintw(title_row, title_val_x, "%s", title_display);
+    if (active_field == 0) attroff(A_REVERSE);
+
+    /* Row 3: Description header */
+    int desc_hdr_row = popup_y + 3;
+    if (active_field == 1) attron(A_REVERSE);
+    mvprintw(desc_hdr_row, popup_x + 1, " Description:");
+    if (active_field == 1) attroff(A_REVERSE);
+
+    /* Rows 4-6: Description content (up to 3 lines, wrapped) */
+    int desc_content_start = popup_y + 4;
+    int inner_w = popup_width - 6;  /* indent 3 each side */
+    if (inner_w < 1) inner_w = 1;
+
+    if (task->description[0] != '\0') {
+        const char *src = task->description;
+        int src_len = (int)strlen(src);
+        int line = 0;
+        int pos = 0;
+        while (pos < src_len && line < 3) {
+            int chunk = inner_w;
+            if (pos + chunk > src_len) chunk = src_len - pos;
+            /* break at newline */
+            for (int ci = 0; ci < chunk; ci++) {
+                if (src[pos + ci] == '\n') { chunk = ci; break; }
+            }
+            char linebuf[256];
+            if (chunk >= (int)sizeof(linebuf)) chunk = (int)sizeof(linebuf) - 1;
+            strncpy(linebuf, src + pos, chunk);
+            linebuf[chunk] = '\0';
+            mvprintw(desc_content_start + line, popup_x + 3, "%s", linebuf);
+            pos += chunk;
+            if (pos < src_len && src[pos] == '\n') pos++;  /* skip newline */
+            line++;
+        }
+    } else {
+        attron(A_DIM);
+        mvprintw(desc_content_start, popup_x + 3, "(empty)");
+        attroff(A_DIM);
+    }
+
+    /* Row 7: Divider */
+    int divider_row = popup_y + 7;
+    for (int x = popup_x + 1; x < popup_x + popup_width - 1; x++) {
+        mvaddch(divider_row, x, ACS_HLINE);
+    }
+
+    /* Row 8: Checklist header */
+    int cl_hdr_row = popup_y + 8;
+    if (active_field == 2) attron(A_REVERSE);
+    mvprintw(cl_hdr_row, popup_x + 1, " Checklist:");
+    if (active_field == 2) attroff(A_REVERSE);
+
+    /* Rows 9+: Checklist items */
+    int cl_start_row = popup_y + 9;
+    int cl_max_rows  = popup_height - (cl_start_row - popup_y) - 3; /* leave hint + border */
+    if (cl_max_rows < 1) cl_max_rows = 1;
+
+    if (task->checklist == NULL) {
+        attron(A_DIM);
+        mvprintw(cl_start_row, popup_x + 3, "(no items)");
+        attroff(A_DIM);
+    } else {
+        ChecklistItem *item = task->checklist;
+        int ci = 0;
+        while (item != NULL && ci < cl_max_rows) {
+            int row = cl_start_row + ci;
+            char item_buf[280];
+            snprintf(item_buf, sizeof(item_buf), "%s %s",
+                     item->checked ? "[x]" : "[ ]", item->text);
+            /* Truncate to fit */
+            int max_item_w = popup_width - 6;
+            if (max_item_w > 0 && (int)strlen(item_buf) > max_item_w)
+                item_buf[max_item_w] = '\0';
+            if (active_field == 2 && ci == board->checklist_index) attron(A_REVERSE);
+            mvprintw(row, popup_x + 3, "%s", item_buf);
+            if (active_field == 2 && ci == board->checklist_index) attroff(A_REVERSE);
+            item = item->next;
+            ci++;
+        }
+    }
+
+    /* Second-to-last row: key hints */
+    int hint_row = popup_y + popup_height - 2;
+    char hint_buf[128];
+    snprintf(hint_buf, sizeof(hint_buf),
+             " Tab:next | j/k:item | Sp:toggle | a:add | d:del | Esc:close");
+    int hint_max = popup_width - 2;
+    if (hint_max > 0 && (int)strlen(hint_buf) > hint_max)
+        hint_buf[hint_max] = '\0';
+    mvprintw(hint_row, popup_x + 1, "%s", hint_buf);
 
     refresh();
 }

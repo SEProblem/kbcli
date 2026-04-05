@@ -24,7 +24,8 @@ typedef enum {
     MODE_DESCRIPTION_VIEW,
     MODE_DESCRIPTION_EDIT,
     MODE_CHECKLIST,
-    MODE_HELP
+    MODE_HELP,
+    MODE_CARD_POPUP
 } AppMode;
 
 /**

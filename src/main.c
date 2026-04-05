@@ -44,10 +44,9 @@ static void event_loop(void) {
         if (global_board.app_mode == MODE_HELP) {
             render_board(&global_board, &current_selection);
             render_help_popup();
-        } else if (global_board.app_mode == MODE_DESCRIPTION_VIEW ||
-                   global_board.app_mode == MODE_DESCRIPTION_EDIT) {
-            /* Render description popup */
-            render_description_popup(&global_board, &current_selection);
+        } else if (global_board.app_mode == MODE_CARD_POPUP) {
+            /* Render card popup (T02 will wire the real active_field accessor) */
+            render_card_popup(&global_board, &current_selection, 0);
         } else {
             /* Render the board (shows current state) */
             render_board(&global_board, &current_selection);

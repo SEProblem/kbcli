@@ -137,4 +137,15 @@ char* show_board_list_menu(void);
  */
 void render_help_popup(void);
 
+/**
+ * Render card popup overlay for in-place editing
+ * Displays title, description, and checklist in a centered overlay
+ * with the active field highlighted for editing.
+ *
+ * @param board        Pointer to the board
+ * @param selection    Pointer to current selection state
+ * @param active_field 0=title, 1=description, 2=checklist
+ */
+void render_card_popup(Board *board, Selection *selection, int active_field);
+
 #endif /* RENDERER_H */
