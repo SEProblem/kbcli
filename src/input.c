@@ -32,6 +32,13 @@ static char input_error[256] = {0};
 static struct timespec last_g_press_time = {0, 0};
 #define G_DOUBLE_TAP_TIMEOUT_MS 300
 
+/* Active field for card popup: 0=title, 1=description, 2=checklist */
+static int popup_active_field = 0;
+
+int card_popup_active_field(void) {
+    return popup_active_field;
+}
+
 /* External board filename for auto-save */
 extern char global_board_filename[512];
 
@@ -370,154 +377,109 @@ int handle_input(Board *board, int key, Selection *selection) {
         return 0;
     }
     
-    /* MODE_DESCRIPTION_VIEW: show description popup */
-    if (board->app_mode == MODE_DESCRIPTION_VIEW) {
-        /* Esc closes popup */
-        if (key == 27) {  /* Escape */
-            board->app_mode = MODE_NORMAL;
-            return 0;
-        }
-        /* Enter enters edit mode */
-        if (key == '\n' || key == KEY_ENTER) {
-            board->app_mode = MODE_DESCRIPTION_EDIT;
-            return 0;
-        }
-        /* 'i' also enters edit mode */
-        if (key == 'i') {
-            board->app_mode = MODE_DESCRIPTION_EDIT;
-            return 0;
-        }
-        return 0;
-    }
-    
-    /* MODE_DESCRIPTION_EDIT: prompt for description immediately */
-    if (board->app_mode == MODE_DESCRIPTION_EDIT) {
-        Column *col = &board->columns[selection->column_index];
-        Task *task = col->tasks;
-        int idx = selection->task_index;
-        while (task != NULL && idx > 0) {
-            task = task->next;
-            idx--;
-        }
-
-        if (task != NULL) {
-            char desc[MAX_DESC_LEN];
-            strncpy(desc, task->description, sizeof(desc) - 1);
-            desc[sizeof(desc) - 1] = '\0';
-
-            if (read_task_description(desc, sizeof(desc)) == 0) {
-                strncpy(task->description, desc, sizeof(task->description) - 1);
-                task->description[sizeof(task->description) - 1] = '\0';
-                task->desc_len = strlen(task->description);
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
-                }
-            }
-        }
-
-        board->app_mode = MODE_NORMAL;
-        return 0;
-    }
-    
-    /* MODE_CHECKLIST: navigate and manage checklist items */
-    if (board->app_mode == MODE_CHECKLIST) {
+    /* MODE_CARD_POPUP: centered overlay — handles title/description/checklist editing */
+    if (board->app_mode == MODE_CARD_POPUP) {
         /* Get the selected task */
         Column *col = &board->columns[selection->column_index];
         Task *task = col->tasks;
         int idx = selection->task_index;
-        while (task != NULL && idx > 0) {
-            task = task->next;
-            idx--;
-        }
-        
-        if (task == NULL) {
-            exit_checklist_mode(board);
-            return 0;
-        }
-        
-        /* Get checklist count */
+        while (task != NULL && idx > 0) { task = task->next; idx--; }
+        if (task == NULL) { board->app_mode = MODE_NORMAL; return 0; }
+
         int checklist_count_val = checklist_count(task);
-        
-        /* Esc exits checklist mode */
-        if (key == 27) {  /* Escape */
-            exit_checklist_mode(board);
+
+        if (key == 27) { /* Esc: save and close */
+            if (board->filename[0] != '\0') board_save(board, board->filename);
+            board->app_mode = MODE_NORMAL;
+            popup_active_field = 0;
+            board->checklist_index = 0;
             return 0;
         }
-        
-        /* Arrow keys navigate checklist items */
-        if (key == KEY_DOWN || key == 'j') {
-            if (board->checklist_index < checklist_count_val - 1) {
-                board->checklist_index++;
+
+        if (key == '\t') { /* Tab: advance field */
+            popup_active_field = (popup_active_field + 1) % 3;
+            return 0;
+        }
+
+        if (key == KEY_BTAB) { /* Shift+Tab: previous field */
+            popup_active_field = (popup_active_field + 2) % 3;
+            return 0;
+        }
+
+        /* Per-field routing */
+        if (popup_active_field == 0) { /* Title field */
+            size_t tlen = strlen(task->title);
+            if ((key == KEY_BACKSPACE || key == 127) && tlen > 0) {
+                task->title[tlen - 1] = '\0';
+            } else if (key >= 32 && key <= 126 && tlen < sizeof(task->title) - 1) {
+                task->title[tlen] = (char)key;
+                task->title[tlen + 1] = '\0';
             }
             return 0;
         }
-        
-        if (key == KEY_UP || key == 'k') {
-            if (board->checklist_index > 0) {
-                board->checklist_index--;
+
+        if (popup_active_field == 1) { /* Description field */
+            size_t dlen = strlen(task->description);
+            if ((key == KEY_BACKSPACE || key == 127) && dlen > 0) {
+                task->description[dlen - 1] = '\0';
+                task->desc_len = dlen - 1;
+            } else if (key >= 32 && key <= 126 && dlen < MAX_DESC_LEN - 1) {
+                task->description[dlen] = (char)key;
+                task->description[dlen + 1] = '\0';
+                task->desc_len = dlen + 1;
             }
             return 0;
         }
-        
-        /* Space toggles checked state of current item */
-        if (key == ' ') {
-            ChecklistItem *item = task->checklist;
-            int item_idx = board->checklist_index;
-            while (item != NULL && item_idx > 0) {
-                item = item->next;
-                item_idx--;
+
+        if (popup_active_field == 2) { /* Checklist field */
+            if (key == 'j' || key == KEY_DOWN) {
+                if (board->checklist_index < checklist_count_val - 1)
+                    board->checklist_index++;
+                return 0;
             }
-            
-            if (item != NULL) {
-                checklist_item_toggle(item);
-                /* Auto-save after toggling */
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
+            if (key == 'k' || key == KEY_UP) {
+                if (board->checklist_index > 0)
+                    board->checklist_index--;
+                return 0;
+            }
+            if (key == ' ') { /* Toggle */
+                ChecklistItem *item = task->checklist;
+                int ii = board->checklist_index;
+                while (item != NULL && ii > 0) { item = item->next; ii--; }
+                if (item != NULL) {
+                    checklist_item_toggle(item);
+                    if (board->filename[0] != '\0') board_save(board, board->filename);
                 }
+                return 0;
             }
-            return 0;
-        }
-        
-        /* 'N' (Shift+N) adds new checklist item */
-        if (key == 'N') {
-            char item_text[256] = {0};
-            if (read_checklist_item(item_text, sizeof(item_text)) == 0) {
-                checklist_item_add(task, item_text);
-                /* Auto-save after adding */
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
+            if (key == 'a') { /* Add checklist item via bottom-bar prompt */
+                char item_text[256] = {0};
+                if (read_checklist_item(item_text, sizeof(item_text)) == 0) {
+                    checklist_item_add(task, item_text);
+                    board->checklist_index = checklist_count(task) - 1;
+                    if (board->filename[0] != '\0') board_save(board, board->filename);
                 }
+                return 0;
             }
-            return 0;
-        }
-        
-        /* 'd' (double tap dd) deletes current checklist item */
-        if (key == 'd') {
-            /* Get current checklist item */
-            ChecklistItem *item = task->checklist;
-            int item_idx = board->checklist_index;
-            while (item != NULL && item_idx > 0) {
-                item = item->next;
-                item_idx--;
-            }
-            
-            if (item != NULL) {
-                checklist_item_delete(task, item);
-                /* Adjust index if needed */
-                if (board->checklist_index >= checklist_count_val - 1) {
-                    board->checklist_index = 0;
+            if (key == 'd') { /* Delete current checklist item */
+                if (checklist_count_val > 0) {
+                    ChecklistItem *item = task->checklist;
+                    int ii = board->checklist_index;
+                    while (item != NULL && ii > 0) { item = item->next; ii--; }
+                    if (item != NULL) {
+                        checklist_item_delete(task, item);
+                        if (board->checklist_index >= checklist_count_val - 1 && board->checklist_index > 0)
+                            board->checklist_index--;
+                        if (board->filename[0] != '\0') board_save(board, board->filename);
+                    }
                 }
-                /* Auto-save after deleting */
-                if (board->filename[0] != '\0') {
-                    board_save(board, board->filename);
-                }
+                return 0;
             }
-            return 0;
         }
-        
+
         return 0;
     }
-    
+
     /* MODE_HELP: any key closes the help overlay */
     if (board->app_mode == MODE_HELP) {
         board->app_mode = MODE_NORMAL;
@@ -526,34 +488,36 @@ int handle_input(Board *board, int key, Selection *selection) {
 
     /* MODE_NORMAL: route keys for navigation and commands */
 
-    /* 'i' - also open description popup (D-01) */
+    /* 'i' - open card popup (D-01) */
     if (key == 'i') {
         /* Check if there's a selected task */
         Column *col = &board->columns[selection->column_index];
         if (col->task_count > 0) {
-            board->app_mode = MODE_DESCRIPTION_VIEW;
+            board->app_mode = MODE_CARD_POPUP;
+            popup_active_field = 0;
+            board->checklist_index = 0;
         }
         return 0;
     }
     
-    /* 'c' - enter checklist mode when in detailed view */
+    /* 'c' - open card popup focused on checklist field */
     if (key == 'c') {
-        /* Only enter checklist mode if detailed view is enabled */
-        if (board->detailed_view) {
-            Column *col = &board->columns[selection->column_index];
-            if (col->task_count > 0) {
-                board->checklist_index = 0;
-                board->app_mode = MODE_CHECKLIST;
-            }
+        Column *col = &board->columns[selection->column_index];
+        if (col->task_count > 0) {
+            board->app_mode = MODE_CARD_POPUP;
+            popup_active_field = 2;
+            board->checklist_index = 0;
         }
         return 0;
     }
     
-    /* Enter key - open description popup (D-01) */
+    /* Enter key - open card popup (D-01) */
     if (key == KEY_ENTER) {
         Column *col = &board->columns[selection->column_index];
         if (col->task_count > 0) {
-            board->app_mode = MODE_DESCRIPTION_VIEW;
+            board->app_mode = MODE_CARD_POPUP;
+            popup_active_field = 0;
+            board->checklist_index = 0;
         }
         return 0;
     }

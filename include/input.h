@@ -23,6 +23,14 @@
 int handle_input(Board *board, int key, Selection *selection);
 
 /**
+ * Get the active field index for the card popup
+ * 0 = title, 1 = description, 2 = checklist
+ * 
+ * @return active field index
+ */
+int card_popup_active_field(void);
+
+/**
  * Wait for a key press and return it
  * Used for input mode
  * 
