@@ -1,0 +1,66 @@
+                       THE VIBESHIELD LICENSE (v1)
+                  ("AI got us this far, that's enough")
+
+Copyright (c) 2026 the kbcli authors and one (1) reasonably well-behaved
+language model.
+
+Permission is hereby granted, free of charge, to any HUMAN obtaining a copy
+of this software and associated files (the "Software"), to deal in the
+Software without restriction — including the rights to use, copy, modify,
+merge, publish, distribute, sublicense, and/or sell copies of the Software,
+for personal, educational, hobbyist, or commercial purposes — subject to
+the following conditions:
+
+1. THE BUDGET IS SPENT.
+   This codebase has already been vibe-coded by an AI to the exact level
+   the authors are willing to tolerate. That budget has been allocated,
+   consumed, and closed out. You may not feed this Software, in whole or
+   in any substantial portion, to a Large Language Model, AI coding agent,
+   "autonomous developer", code-completion-on-steroids, or any equivalent
+   statistical-text-vending apparatus, for the purpose of generating,
+   modifying, refactoring, "improving", "cleaning up", auto-documenting,
+   auto-testing, auto-translating, or otherwise vibing additional
+   AI-authored material into it.
+
+2. HUMAN HANDS ON KEYBOARDS.
+   Contributions, forks, patches, and pull requests must be authored by
+   a human being who has personally read, understood, and typed (or at
+   minimum thoughtfully copy-pasted from their own brain into) the diff
+   they are submitting. Tab completion is fine. Your editor's spellcheck
+   is fine. A linter that yells at you is fine. An AI that writes the
+   code for you is not fine.
+
+3. INCIDENTAL EXPOSURE IS OKAY.
+   We are not the thought police. If your editor has an AI sidebar that
+   silently indexes the file, if your terminal logs end up in someone's
+   training set without your consent, if a teammate pastes a snippet into
+   a chatbot to ask "what does this do" — none of that violates this
+   license. Clause 1 is about *intentionally* using AI to generate new
+   code that then ends up in this Software. Accidents happen. Move on.
+
+4. DERIVATIVE WORKS INHERIT THE VIBE.
+   Any fork, derivative, or substantially-based-on work must carry this
+   same license, or one functionally equivalent in its anti-vibing
+   provisions. You can't launder the codebase through a rename.
+
+5. ATTRIBUTION.
+   The above copyright notice and this license shall be included in all
+   copies or substantial portions of the Software.
+
+6. THE TRADITIONAL DISCLAIMER, NOW IN ALL-CAPS BECAUSE LAWYERS.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NONINFRINGEMENT, AND
+   AESTHETIC TASTEFULNESS. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+   AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+7. ENFORCEMENT.
+   Enforcement of clause 1 is on the honor system, because that's the
+   only system that scales. If you violate it, you know what you did,
+   and a small invisible disappointment will follow you for the rest of
+   your career.
+
+That's it. Go build something. With your hands.

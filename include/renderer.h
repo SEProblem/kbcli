@@ -144,4 +144,11 @@ void render_help_popup(void);
  */
 void render_card_popup(Board *board, Selection *selection, int active_field);
 
+/**
+ * Width (in columns) of the description text area inside the card popup,
+ * matching what render_card_popup uses internally. Exposed so the input
+ * handler can compute identical line wrapping when navigating the cursor.
+ */
+int renderer_card_popup_inner_width(void);
+
 #endif /* RENDERER_H */

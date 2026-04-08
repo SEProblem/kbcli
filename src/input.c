@@ -40,12 +40,174 @@ static int popup_active_field = 0;
  * switch fields, so the checklist field always opens in nav mode. */
 static int checklist_editing = 0;
 
+/* In-place text editing cursors for the title and description fields.
+ * These are byte offsets into task->title / task->description. They get
+ * reset to the end-of-string each time the popup opens (so if the user
+ * is opening an existing card to keep typing, the cursor lands where
+ * they'd expect — past the existing text). */
+static int title_cursor = 0;
+static int desc_cursor = 0;
+
+/* For description: which visual line is at the top of the rendered
+ * 3-row desc area. Auto-adjusted as the cursor moves so the cursor
+ * always remains visible. */
+static int desc_scroll_line = 0;
+
+/* Lazily-resolved key codes for Ctrl+Left and Ctrl+Right. ncurses doesn't
+ * give them a stable KEY_* constant — we have to ask terminfo for the
+ * sequence and look up the code ncurses assigned to it. -1 = not present
+ * in this terminal's terminfo (we'll just ignore the binding). */
+static int key_ctrl_left  = -1;
+static int key_ctrl_right = -1;
+static int special_keys_inited = 0;
+
+static void init_special_keys_lazy(void) {
+    if (special_keys_inited) return;
+    special_keys_inited = 1;
+    char *s;
+    s = tigetstr("kLFT5");
+    if (s != NULL && s != (char*)-1) {
+        int kc = key_defined(s);
+        if (kc > 0) key_ctrl_left = kc;
+    }
+    s = tigetstr("kRIT5");
+    if (s != NULL && s != (char*)-1) {
+        int kc = key_defined(s);
+        if (kc > 0) key_ctrl_right = kc;
+    }
+}
+
 int card_popup_active_field(void) {
     return popup_active_field;
 }
 
 int card_popup_checklist_editing(void) {
     return checklist_editing;
+}
+
+int card_popup_title_cursor(void) { return title_cursor; }
+int card_popup_desc_cursor(void)  { return desc_cursor; }
+int card_popup_desc_scroll(void)  { return desc_scroll_line; }
+
+/* ---------- in-place text editing helpers ---------- */
+
+static int is_word_char(unsigned char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+/* vim/readline-style word-left: skip non-word chars, then skip word chars. */
+static int word_left(const char *s, int cursor) {
+    if (cursor <= 0) return 0;
+    cursor--;
+    while (cursor > 0 && !is_word_char((unsigned char)s[cursor])) cursor--;
+    while (cursor > 0 && is_word_char((unsigned char)s[cursor - 1])) cursor--;
+    return cursor;
+}
+
+static int word_right(const char *s, int cursor) {
+    int len = (int)strlen(s);
+    if (cursor >= len) return len;
+    while (cursor < len && is_word_char((unsigned char)s[cursor])) cursor++;
+    while (cursor < len && !is_word_char((unsigned char)s[cursor])) cursor++;
+    return cursor;
+}
+
+/* Insert one character at cursor. Returns 1 on success, 0 if buffer full. */
+static int text_insert_char(char *s, size_t cap, int *cursor, char ch) {
+    size_t len = strlen(s);
+    if (len + 1 >= cap) return 0;
+    if (*cursor < 0) *cursor = 0;
+    if (*cursor > (int)len) *cursor = (int)len;
+    /* Shift right (including the trailing NUL) */
+    memmove(s + *cursor + 1, s + *cursor, len - *cursor + 1);
+    s[*cursor] = ch;
+    (*cursor)++;
+    return 1;
+}
+
+static void text_delete_back(char *s, int *cursor) {
+    if (*cursor <= 0) return;
+    size_t len = strlen(s);
+    memmove(s + *cursor - 1, s + *cursor, len - *cursor + 1);
+    (*cursor)--;
+}
+
+static void text_delete_forward(char *s, int *cursor) {
+    size_t len = strlen(s);
+    if ((size_t)*cursor >= len) return;
+    memmove(s + *cursor, s + *cursor + 1, len - *cursor);
+}
+
+/* ---------- description wrapping layout (shared with renderer) ---------- */
+
+/*
+ * Compute the starts of each visual line for `text` wrapped at inner_w
+ * columns, with hard breaks at '\n'. Fills line_starts[0..count-1].
+ * Returns the visual line count (>= 1 even for empty text).
+ *
+ * The renderer uses this to know where each visual line begins so it can
+ * print substrings; the input handler uses it to translate the cursor
+ * byte offset into a (line, column) pair for vertical navigation.
+ */
+int desc_compute_lines(const char *text, int inner_w, int *line_starts, int max_lines) {
+    if (line_starts == NULL || max_lines <= 0 || inner_w < 1) return 0;
+    line_starts[0] = 0;
+    int count = 1;
+    int len = (text != NULL) ? (int)strlen(text) : 0;
+    int pos = 0;
+    while (pos < len && count < max_lines) {
+        int max_end = pos + inner_w;
+        if (max_end > len) max_end = len;
+        int line_end = pos;
+        while (line_end < max_end && text[line_end] != '\n') line_end++;
+        if (line_end < len && text[line_end] == '\n') {
+            /* Hard break — next visual line starts AFTER the newline */
+            pos = line_end + 1;
+        } else if (line_end == max_end && line_end < len) {
+            /* Soft wrap — next visual line starts at line_end (no \n eaten) */
+            pos = line_end;
+        } else {
+            break;
+        }
+        line_starts[count++] = pos;
+    }
+    return count;
+}
+
+/* Locate (line, col) for a cursor byte position given a precomputed layout. */
+void desc_cursor_locate(int cursor, const int *line_starts, int line_count,
+                        int *out_line, int *out_col) {
+    if (line_count <= 0) { *out_line = 0; *out_col = 0; return; }
+    int line = 0;
+    for (int i = 1; i < line_count; i++) {
+        if (line_starts[i] <= cursor) line = i;
+        else break;
+    }
+    *out_line = line;
+    *out_col = cursor - line_starts[line];
+}
+
+/* After moving the description cursor, scroll the desc viewport so the
+ * cursor's visual line stays inside the 3 visible rows. */
+static void desc_clamp_scroll(const char *text, int inner_w) {
+    int line_starts[64];
+    int n = desc_compute_lines(text, inner_w, line_starts, 64);
+    int cl, cc;
+    desc_cursor_locate(desc_cursor, line_starts, n, &cl, &cc);
+    (void)cc;
+    if (cl < desc_scroll_line) desc_scroll_line = cl;
+    if (cl >= desc_scroll_line + 3) desc_scroll_line = cl - 2;
+    if (desc_scroll_line < 0) desc_scroll_line = 0;
+}
+
+/* Reset cursor state to the end of each field's current text. Called
+ * once per popup-open transition (not on Tab between fields). */
+static void popup_reset_cursors(Task *task) {
+    if (task == NULL) return;
+    title_cursor = (int)strlen(task->title);
+    desc_cursor  = (int)strlen(task->description);
+    desc_scroll_line = 0;
 }
 
 /* Swap two ChecklistItems' data in place. The pointers stay put, so we
@@ -265,6 +427,7 @@ int handle_input(Board *board, int key, Selection *selection) {
 
     /* MODE_CARD_POPUP: centered overlay — handles title/description/checklist editing */
     if (board->app_mode == MODE_CARD_POPUP) {
+        init_special_keys_lazy();
         /* Get the selected task */
         Column *col = &board->columns[selection->column_index];
         Task *task = col->tasks;
@@ -315,27 +478,103 @@ int handle_input(Board *board, int key, Selection *selection) {
         }
 
         /* Per-field routing */
-        if (popup_active_field == 0) { /* Title field */
-            size_t tlen = strlen(task->title);
-            if ((key == KEY_BACKSPACE || key == 127) && tlen > 0) {
-                task->title[tlen - 1] = '\0';
-            } else if (key >= 32 && key <= 126 && tlen < sizeof(task->title) - 1) {
-                task->title[tlen] = (char)key;
-                task->title[tlen + 1] = '\0';
+        if (popup_active_field == 0) { /* Title field — in-place editor */
+            int tlen = (int)strlen(task->title);
+            if (title_cursor > tlen) title_cursor = tlen;
+            if (title_cursor < 0)    title_cursor = 0;
+
+            if (key == KEY_LEFT) {
+                if (title_cursor > 0) title_cursor--;
+            } else if (key == KEY_RIGHT) {
+                if (title_cursor < tlen) title_cursor++;
+            } else if (key == key_ctrl_left || key == KEY_SLEFT) {
+                title_cursor = word_left(task->title, title_cursor);
+            } else if (key == key_ctrl_right || key == KEY_SRIGHT) {
+                title_cursor = word_right(task->title, title_cursor);
+            } else if (key == KEY_HOME || key == 1 /* Ctrl-A */) {
+                title_cursor = 0;
+            } else if (key == KEY_END  || key == 5 /* Ctrl-E */) {
+                title_cursor = tlen;
+            } else if (key == KEY_BACKSPACE || key == 127 || key == 8) {
+                text_delete_back(task->title, &title_cursor);
+            } else if (key == KEY_DC) {
+                text_delete_forward(task->title, &title_cursor);
+            } else if (key >= 32 && key <= 126) {
+                text_insert_char(task->title, sizeof(task->title), &title_cursor, (char)key);
             }
             return 0;
         }
 
-        if (popup_active_field == 1) { /* Description field */
-            size_t dlen = strlen(task->description);
-            if ((key == KEY_BACKSPACE || key == 127) && dlen > 0) {
-                task->description[dlen - 1] = '\0';
-                task->desc_len = dlen - 1;
-            } else if (key >= 32 && key <= 126 && dlen < MAX_DESC_LEN - 1) {
-                task->description[dlen] = (char)key;
-                task->description[dlen + 1] = '\0';
-                task->desc_len = dlen + 1;
+        if (popup_active_field == 1) { /* Description field — in-place editor with newlines */
+            int dlen = (int)strlen(task->description);
+            if (desc_cursor > dlen) desc_cursor = dlen;
+            if (desc_cursor < 0)    desc_cursor = 0;
+            int inner_w = renderer_card_popup_inner_width();
+
+            if (key == KEY_LEFT) {
+                if (desc_cursor > 0) desc_cursor--;
+            } else if (key == KEY_RIGHT) {
+                if (desc_cursor < dlen) desc_cursor++;
+            } else if (key == key_ctrl_left || key == KEY_SLEFT) {
+                desc_cursor = word_left(task->description, desc_cursor);
+            } else if (key == key_ctrl_right || key == KEY_SRIGHT) {
+                desc_cursor = word_right(task->description, desc_cursor);
+            } else if (key == KEY_HOME || key == 1 /* Ctrl-A */) {
+                /* Jump to start of current visual line */
+                int ls[64];
+                int n = desc_compute_lines(task->description, inner_w, ls, 64);
+                int cl, cc; desc_cursor_locate(desc_cursor, ls, n, &cl, &cc);
+                desc_cursor = ls[cl];
+            } else if (key == KEY_END || key == 5 /* Ctrl-E */) {
+                /* Jump to end of current visual line */
+                int ls[64];
+                int n = desc_compute_lines(task->description, inner_w, ls, 64);
+                int cl, cc; desc_cursor_locate(desc_cursor, ls, n, &cl, &cc);
+                int end = (cl + 1 < n) ? ls[cl + 1] : dlen;
+                /* Don't include the trailing \n in the line */
+                if (end > 0 && end <= dlen && task->description[end - 1] == '\n') end--;
+                desc_cursor = end;
+            } else if (key == KEY_UP) {
+                int ls[64];
+                int n = desc_compute_lines(task->description, inner_w, ls, 64);
+                int cl, cc; desc_cursor_locate(desc_cursor, ls, n, &cl, &cc);
+                if (cl > 0) {
+                    int prev_start = ls[cl - 1];
+                    int prev_end   = ls[cl] - 1;
+                    if (prev_end < prev_start) prev_end = prev_start;
+                    /* Strip a trailing newline that belongs to the prev line */
+                    if (prev_end >= 0 && task->description[prev_end] == '\n') prev_end--;
+                    int prev_len = prev_end - prev_start + 1;
+                    if (prev_len < 0) prev_len = 0;
+                    int target_col = (cc < prev_len) ? cc : prev_len;
+                    desc_cursor = prev_start + target_col;
+                }
+            } else if (key == KEY_DOWN) {
+                int ls[64];
+                int n = desc_compute_lines(task->description, inner_w, ls, 64);
+                int cl, cc; desc_cursor_locate(desc_cursor, ls, n, &cl, &cc);
+                if (cl + 1 < n) {
+                    int next_start = ls[cl + 1];
+                    int next_end   = (cl + 2 < n) ? ls[cl + 2] - 1 : dlen - 1;
+                    if (next_end >= 0 && next_end < dlen &&
+                        task->description[next_end] == '\n') next_end--;
+                    int next_len = next_end - next_start + 1;
+                    if (next_len < 0) next_len = 0;
+                    int target_col = (cc < next_len) ? cc : next_len;
+                    desc_cursor = next_start + target_col;
+                }
+            } else if (key == KEY_BACKSPACE || key == 127 || key == 8) {
+                text_delete_back(task->description, &desc_cursor);
+            } else if (key == KEY_DC) {
+                text_delete_forward(task->description, &desc_cursor);
+            } else if (key == '\n' || key == KEY_ENTER) {
+                /* Insert literal newline. Description supports multi-line. */
+                text_insert_char(task->description, MAX_DESC_LEN, &desc_cursor, '\n');
+            } else if (key >= 32 && key <= 126) {
+                text_insert_char(task->description, MAX_DESC_LEN, &desc_cursor, (char)key);
             }
+            task->desc_len = strlen(task->description);
+            desc_clamp_scroll(task->description, inner_w);
             return 0;
         }
 
@@ -457,6 +696,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             popup_active_field = 0;
             board->checklist_index = 0;
             checklist_editing = 0;
+            popup_reset_cursors(task_at_index(col, selection->task_index));
         }
         return 0;
     }
@@ -469,6 +709,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             popup_active_field = 2;
             board->checklist_index = 0;
             checklist_editing = 0;
+            popup_reset_cursors(task_at_index(col, selection->task_index));
         }
         return 0;
     }
@@ -481,6 +722,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             popup_active_field = 0;
             board->checklist_index = 0;
             checklist_editing = 0;
+            popup_reset_cursors(task_at_index(col, selection->task_index));
         }
         return 0;
     }
@@ -540,6 +782,7 @@ int handle_input(Board *board, int key, Selection *selection) {
                 popup_active_field = 0;
                 board->checklist_index = 0;
                 checklist_editing = 0;
+                popup_reset_cursors(new_task);
             }
             break;
         }
@@ -805,7 +1048,11 @@ void handle_mouse_event(Board *board, Selection *selection) {
             board->app_mode = MODE_CARD_POPUP;
             popup_active_field = 0;
             checklist_editing = 0;
-        } else if (event.bstate & BUTTON1_PRESSED || 
+            {
+                Column *mcol = &board->columns[selection->column_index];
+                popup_reset_cursors(task_at_index(mcol, selection->task_index));
+            }
+        } else if (event.bstate & BUTTON1_PRESSED ||
                    event.bstate & BUTTON1_CLICKED) {
             /* Navigate to task at clicked position */
             navigation_select_task_at(board, selection, event.y, event.x);

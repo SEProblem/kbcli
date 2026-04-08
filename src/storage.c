@@ -85,19 +85,33 @@ static int parse_column_header(const char *line) {
     return -1;  /* Unknown column */
 }
 
+/* Unescape a description value: "\\n" -> '\n', "\\\\" -> '\\'. In place. */
+static void desc_unescape(char *s) {
+    if (s == NULL) return;
+    char *r = s, *w = s;
+    while (*r) {
+        if (r[0] == '\\' && r[1] == 'n') { *w++ = '\n'; r += 2; }
+        else if (r[0] == '\\' && r[1] == '\\') { *w++ = '\\'; r += 2; }
+        else { *w++ = *r++; }
+    }
+    *w = '\0';
+}
+
 /* Parse description from a task line following the title */
 static void parse_task_description(Task *task, const char *description_line) {
     if (task == NULL || description_line == NULL) return;
-    
+
     /* Skip "Description: " prefix (13 chars) */
     const char *desc_start = description_line + 13;
     trim_trailing((char*)desc_start);
-    
-    /* Copy description with bounds checking */
+
+    /* Copy description with bounds checking, then expand escape sequences
+     * so multi-line descriptions (stored as "\n" on disk) round-trip. */
     size_t desc_len = strlen(desc_start);
     if (desc_len > 0) {
         strncpy(task->description, desc_start, sizeof(task->description) - 1);
         task->description[sizeof(task->description) - 1] = '\0';
+        desc_unescape(task->description);
         task->desc_len = strlen(task->description);
     }
 }
@@ -257,9 +271,17 @@ int write_markdown(Board *board, const char *filepath) {
             } else {
                 fprintf(fp, "- [ ] %s\n", task->title);
             }
-            /* Write description if present */
+            /* Write description if present. Newlines are escaped as \n
+             * (and literal backslashes as \\) so the description stays on
+             * a single line in the markdown — preserves the simple parser. */
             if (task->description[0] != '\0') {
-                fprintf(fp, "Description: %s\n", task->description);
+                fputs("Description: ", fp);
+                for (const char *p = task->description; *p; p++) {
+                    if (*p == '\n')      fputs("\\n",  fp);
+                    else if (*p == '\\') fputs("\\\\", fp);
+                    else                 fputc(*p, fp);
+                }
+                fputc('\n', fp);
             }
             /* Write checklist items INDENTED so the parser (and human readers)
              * can distinguish them from sibling tasks. Without indentation

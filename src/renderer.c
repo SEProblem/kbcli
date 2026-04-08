@@ -21,6 +21,34 @@ extern char global_current_board_name[256];
 extern const char* input_get_error(void);
 extern void input_clear_error(void);
 
+/* Cursor state and layout helpers exposed by input.c so we can render
+ * the in-place editing cursors for the card popup. */
+extern int card_popup_title_cursor(void);
+extern int card_popup_desc_cursor(void);
+extern int card_popup_desc_scroll(void);
+extern int desc_compute_lines(const char *text, int inner_w, int *line_starts, int max_lines);
+extern void desc_cursor_locate(int cursor, const int *line_starts, int line_count,
+                               int *out_line, int *out_col);
+
+/* Most-recent inner_w used by render_card_popup. Stored so the input
+ * handler can call renderer_card_popup_inner_width() and get the same
+ * wrap width for cursor math. Defaulted for the very first input event
+ * (before render runs) by computing it from the current screen width. */
+static int last_popup_inner_w = 0;
+
+int renderer_card_popup_inner_width(void) {
+    if (last_popup_inner_w > 0) return last_popup_inner_w;
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    (void)height;
+    int popup_width = (int)(width * 0.7);
+    if (popup_width < 44)        popup_width = 44;
+    if (popup_width > width - 4) popup_width = width - 4;
+    int inner_w = popup_width - 6;
+    if (inner_w < 1) inner_w = 1;
+    return inner_w;
+}
+
 /* Scroll offsets for each column (for column-local scrolling) */
 static int scroll_offsets[3] = {0, 0, 0};
 
@@ -1052,31 +1080,35 @@ void render_card_popup(Board *board, Selection *selection, int active_field) {
     mvprintw(desc_hdr_row, popup_x + 1, " Description:");
     if (active_field == 1) attroff(A_REVERSE);
 
-    /* Rows 4-6: Description content (up to 3 lines, wrapped) */
+    /* Rows 4-6: Description content (3 visible visual lines, scrollable) */
     int desc_content_start = popup_y + 4;
     int inner_w = popup_width - 6;  /* indent 3 each side */
     if (inner_w < 1) inner_w = 1;
+    last_popup_inner_w = inner_w;
+    int desc_visible_rows = 3;
 
     if (task->description[0] != '\0') {
-        const char *src = task->description;
-        int src_len = (int)strlen(src);
-        int line = 0;
-        int pos = 0;
-        while (pos < src_len && line < 3) {
-            int chunk = inner_w;
-            if (pos + chunk > src_len) chunk = src_len - pos;
-            /* break at newline */
-            for (int ci = 0; ci < chunk; ci++) {
-                if (src[pos + ci] == '\n') { chunk = ci; break; }
-            }
+        int line_starts[64];
+        int total_lines = desc_compute_lines(task->description, inner_w, line_starts, 64);
+        int desc_len = (int)strlen(task->description);
+        int scroll = card_popup_desc_scroll();
+        if (scroll < 0) scroll = 0;
+        if (scroll > total_lines - 1) scroll = total_lines - 1;
+        for (int row = 0; row < desc_visible_rows; row++) {
+            int li = scroll + row;
+            if (li >= total_lines) break;
+            int s = line_starts[li];
+            int e = (li + 1 < total_lines) ? line_starts[li + 1] : desc_len;
+            /* Strip a trailing \n that belongs to a hard-break line. */
+            if (e > s && task->description[e - 1] == '\n') e--;
+            int chunk = e - s;
+            if (chunk < 0) chunk = 0;
+            if (chunk > inner_w) chunk = inner_w;
             char linebuf[256];
             if (chunk >= (int)sizeof(linebuf)) chunk = (int)sizeof(linebuf) - 1;
-            strncpy(linebuf, src + pos, chunk);
+            memcpy(linebuf, task->description + s, chunk);
             linebuf[chunk] = '\0';
-            mvprintw(desc_content_start + line, popup_x + 3, "%s", linebuf);
-            pos += chunk;
-            if (pos < src_len && src[pos] == '\n') pos++;  /* skip newline */
-            line++;
+            mvprintw(desc_content_start + row, popup_x + 3, "%s", linebuf);
         }
     } else if (active_field != 1) {
         /* Empty description placeholder is hidden while editing — the
@@ -1146,34 +1178,34 @@ void render_card_popup(Board *board, Selection *selection, int active_field) {
     int cursor_y = title_row;
     int cursor_x = title_val_x;
     if (active_field == 0) {
+        /* Park cursor at the byte position the user is editing, not at end. */
+        int tcur = card_popup_title_cursor();
+        int tlen = (int)strlen(task->title);
+        if (tcur < 0)    tcur = 0;
+        if (tcur > tlen) tcur = tlen;
         cursor_y = title_row;
-        cursor_x = title_val_x + (int)strlen(task->title);
+        cursor_x = title_val_x + tcur;
         if (cursor_x > popup_x + popup_width - 2)
             cursor_x = popup_x + popup_width - 2;
     } else if (active_field == 1) {
-        /* Cursor at the end of the description text (last rendered line). */
+        /* Description: position cursor based on its visual (line, col)
+         * after applying the current scroll offset. */
         if (task->description[0] == '\0') {
             cursor_y = desc_content_start;
             cursor_x = popup_x + 3;
         } else {
-            int dlen = (int)strlen(task->description);
-            int line = 0;
-            int pos = 0;
-            int col_in_line = 0;
-            while (pos < dlen && line < 3) {
-                int chunk = inner_w;
-                if (pos + chunk > dlen) chunk = dlen - pos;
-                for (int ci = 0; ci < chunk; ci++) {
-                    if (task->description[pos + ci] == '\n') { chunk = ci; break; }
-                }
-                col_in_line = chunk;
-                pos += chunk;
-                if (pos < dlen && task->description[pos] == '\n') { pos++; line++; col_in_line = 0; }
-                else if (pos < dlen) line++;
-            }
-            cursor_y = desc_content_start + line;
-            cursor_x = popup_x + 3 + col_in_line;
-            if (cursor_y >= desc_content_start + 3) cursor_y = desc_content_start + 2;
+            int line_starts[64];
+            int total = desc_compute_lines(task->description, inner_w, line_starts, 64);
+            int cl, cc;
+            desc_cursor_locate(card_popup_desc_cursor(), line_starts, total, &cl, &cc);
+            int scroll = card_popup_desc_scroll();
+            int vis_row = cl - scroll;
+            if (vis_row < 0) vis_row = 0;
+            if (vis_row > 2) vis_row = 2;
+            cursor_y = desc_content_start + vis_row;
+            cursor_x = popup_x + 3 + cc;
+            if (cursor_x > popup_x + popup_width - 2)
+                cursor_x = popup_x + popup_width - 2;
         }
     } else if (active_field == 2) {
         if (task->checklist == NULL) {
