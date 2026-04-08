@@ -735,10 +735,36 @@ void render_board_list(char **board_names, int count, int selected) {
     /* Help text — truncated to fit inside the box. */
     int hint_max = menu_width - 4;
     char hint[64];
-    snprintf(hint, sizeof(hint), "j/k:nav | Enter:select | Esc:cancel");
+    snprintf(hint, sizeof(hint), "j/k:nav | Enter:select | d:del | Esc:cancel");
     if ((int)strlen(hint) > hint_max && hint_max > 0) hint[hint_max] = '\0';
     mvwprintw(stdscr, start_y + menu_height - 2, start_x + 2, "%s", hint);
 
+    refresh();
+}
+
+/* Replace the bottom hint line of the board picker with a transient message
+ * (warning, confirm prompt, etc). Caller is responsible for re-rendering the
+ * menu afterwards to restore the normal hint. */
+static void board_picker_set_message(const char *msg) {
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    int menu_height = height - 4;
+    int menu_width = 50;
+    if (menu_width > width - 4) menu_width = width - 4;
+    int start_y = (height - menu_height) / 2;
+    int start_x = (width - menu_width) / 2;
+    if (start_y < 1) start_y = 1;
+    if (start_x < 1) start_x = 1;
+    int row = start_y + menu_height - 2;
+    /* Wipe the old hint, then write the new message clipped to fit. */
+    for (int x = start_x + 1; x < start_x + menu_width - 1; x++) {
+        mvaddch(row, x, ' ');
+    }
+    int max = menu_width - 4;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%s", msg);
+    if ((int)strlen(buf) > max && max > 0) buf[max] = '\0';
+    mvwprintw(stdscr, row, start_x + 2, "%s", buf);
     refresh();
 }
 
@@ -750,34 +776,34 @@ char* show_board_list_menu(void) {
     /* Get available boards */
     char **boards = NULL;
     int count = 0;
-    
+
     if (board_list_boards(&boards, &count) != 0 || count == 0) {
         return NULL;
     }
-    
+
     /* Get current board name */
     extern char global_current_board_name[];
-    
+
     /* Find current board index */
     int selected = 0;
     for (int i = 0; i < count; i++) {
-        if (boards[i] != NULL && 
+        if (boards[i] != NULL &&
             strcmp(boards[i], global_current_board_name) == 0) {
             selected = i;
             break;
         }
     }
-    
+
     /* Render initial list */
     render_board_list(boards, count, selected);
-    
+
     /* Input loop */
     int done = 0;
     char *result = NULL;
-    
+
     while (!done) {
         int key = getch();
-        
+
         switch (key) {
             case KEY_DOWN:
             case 'j':
@@ -786,7 +812,7 @@ char* show_board_list_menu(void) {
                     render_board_list(boards, count, selected);
                 }
                 break;
-                
+
             case KEY_UP:
             case 'k':
                 if (selected > 0) {
@@ -794,7 +820,7 @@ char* show_board_list_menu(void) {
                     render_board_list(boards, count, selected);
                 }
                 break;
-                
+
             case '\n':
             case KEY_ENTER:
                 /* Select current board */
@@ -803,16 +829,60 @@ char* show_board_list_menu(void) {
                 }
                 done = 1;
                 break;
-                
+
+            case 'd': {
+                /* Delete the highlighted board, with guards + a y/N confirm.
+                 * Two cases we refuse outright:
+                 *   - the active board (would orphan the running session)
+                 *   - the last remaining board (we'd be left with nothing
+                 *     to switch to and the picker would have to bail) */
+                if (boards[selected] == NULL) break;
+                if (count <= 1) {
+                    board_picker_set_message("Can't delete the last board. Esc to dismiss.");
+                    getch();
+                    render_board_list(boards, count, selected);
+                    break;
+                }
+                if (strcmp(boards[selected], global_current_board_name) == 0) {
+                    board_picker_set_message("Can't delete the active board. Esc to dismiss.");
+                    getch();
+                    render_board_list(boards, count, selected);
+                    break;
+                }
+                char prompt[128];
+                snprintf(prompt, sizeof(prompt),
+                         "Delete '%s'? y/N", boards[selected]);
+                board_picker_set_message(prompt);
+                int confirm = getch();
+                if (confirm == 'y' || confirm == 'Y') {
+                    char *victim = strdup(boards[selected]);
+                    if (board_delete(victim) == 0) {
+                        /* Refresh the list from disk. */
+                        board_list_free(boards, count);
+                        boards = NULL;
+                        count = 0;
+                        if (board_list_boards(&boards, &count) != 0 || count == 0) {
+                            free(victim);
+                            return NULL;
+                        }
+                        if (selected >= count) selected = count - 1;
+                        if (selected < 0) selected = 0;
+                    }
+                    free(victim);
+                }
+                render_board_list(boards, count, selected);
+                break;
+            }
+
             case 27:  /* Escape */
                 done = 1;
                 break;
-                
+
             default:
                 break;
         }
     }
-    
+
     /* Cleanup */
     board_list_free(boards, count);
 
