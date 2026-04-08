@@ -537,9 +537,25 @@ void board_list_free(char **boards, int count) {
  * @param name Board name (without .md extension)
  * @return 0 on success, -1 on error
  */
+/* Reject board names that aren't safe to land on disk. We allow printable
+ * ASCII only and forbid path separators and a leading dot. This is defense
+ * in depth: read_board_name() already filters its input, but a board has
+ * shown up on disk with a non-ASCII byte in the name (origin unclear —
+ * possibly a paste/terminal-escape interaction during :bnew), so the
+ * filesystem layer enforces the invariant unconditionally. */
+static int board_name_is_safe(const char *name) {
+    if (name == NULL || name[0] == '\0') return 0;
+    if (name[0] == '.') return 0;  /* no hidden files / no "." / ".." */
+    for (const unsigned char *p = (const unsigned char *)name; *p; p++) {
+        if (*p < 32 || *p > 126) return 0;       /* printable ASCII only */
+        if (*p == '/' || *p == '\\') return 0;    /* no path separators */
+    }
+    return 1;
+}
+
 int board_create(const char *name) {
-    if (name == NULL || name[0] == '\0') return -1;
-    
+    if (!board_name_is_safe(name)) return -1;
+
     /* Get boards directory */
     char dir_path[512];
     if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
