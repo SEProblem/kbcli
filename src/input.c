@@ -35,8 +35,59 @@ static struct timespec last_g_press_time = {0, 0};
 /* Active field for card popup: 0=title, 1=description, 2=checklist */
 static int popup_active_field = 0;
 
+/* When in checklist field: 0 = navigating items, 1 = inline-editing the
+ * item at board->checklist_index. Reset whenever we leave the popup or
+ * switch fields, so the checklist field always opens in nav mode. */
+static int checklist_editing = 0;
+
 int card_popup_active_field(void) {
     return popup_active_field;
+}
+
+int card_popup_checklist_editing(void) {
+    return checklist_editing;
+}
+
+/* Swap two ChecklistItems' data in place. The pointers stay put, so we
+ * don't need a prev-pointer walk on the singly-linked list. */
+static void checklist_swap_data(ChecklistItem *a, ChecklistItem *b) {
+    if (a == NULL || b == NULL || a == b) return;
+    char tmp_text[256];
+    int tmp_checked = a->checked;
+    strncpy(tmp_text, a->text, sizeof(tmp_text) - 1);
+    tmp_text[sizeof(tmp_text) - 1] = '\0';
+    a->checked = b->checked;
+    strncpy(a->text, b->text, sizeof(a->text) - 1);
+    a->text[sizeof(a->text) - 1] = '\0';
+    b->checked = tmp_checked;
+    strncpy(b->text, tmp_text, sizeof(b->text) - 1);
+    b->text[sizeof(b->text) - 1] = '\0';
+}
+
+/* Walk the checklist to the item at the given index, or NULL. */
+static ChecklistItem *checklist_at(Task *task, int index) {
+    if (task == NULL || index < 0) return NULL;
+    ChecklistItem *it = task->checklist;
+    while (it != NULL && index > 0) { it = it->next; index--; }
+    return it;
+}
+
+/* Insert a new (empty) checklist item at the given index. Index 0 means
+ * at the head; an index >= count appends. Returns the inserted item. */
+static ChecklistItem *checklist_insert_empty_at(Task *task, int index) {
+    if (task == NULL) return NULL;
+    ChecklistItem *new_item = checklist_item_create("");
+    if (new_item == NULL) return NULL;
+    if (index <= 0 || task->checklist == NULL) {
+        new_item->next = task->checklist;
+        task->checklist = new_item;
+        return new_item;
+    }
+    ChecklistItem *prev = task->checklist;
+    while (prev->next != NULL && index > 1) { prev = prev->next; index--; }
+    new_item->next = prev->next;
+    prev->next = new_item;
+    return new_item;
 }
 
 /* External board filename for auto-save */
@@ -106,155 +157,6 @@ static Task* task_at_index(Column *col, int index) {
     return task;
 }
 
-int read_task_title(char *buffer, size_t size) {
-    if (buffer == NULL || size == 0) return -1;
-    
-    int height, width;
-    getmaxyx(stdscr, height, width);
-    
-    /* Clear input buffer */
-    buffer[0] = '\0';
-    
-    /* Create input prompt */
-    int prompt_y = height - 2;
-    int prompt_x = 0;
-    
-    /* Show prompt */
-    mvprintw(prompt_y, prompt_x, "Task title: ");
-    clrtoeol();
-    refresh();
-    
-    /* Move cursor to input position */
-    move(prompt_y, prompt_x + 12);
-    
-    /* Read input with bounds checking (per PITFALLS.md) */
-    echo();
-    int ch;
-    size_t pos = 0;
-    
-    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
-        if (ch == 27) {  /* Escape to cancel */
-            buffer[0] = '\0';
-            noecho();
-            return -1;
-        }
-        if (ch == KEY_BACKSPACE || ch == 127) {  /* Backspace */
-            if (pos > 0) {
-                pos--;
-                buffer[pos] = '\0';
-                delch();
-            }
-        } else if (ch >= 32 && ch <= 126 && pos < size - 1) {
-            buffer[pos++] = (char)ch;
-            buffer[pos] = '\0';
-        }
-    }
-    
-    noecho();
-    
-    /* Clear the input line */
-    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
-    
-    return (buffer[0] == '\0') ? -1 : 0;
-}
-
-/**
- * Read task description from user input
- * Uses ncurses input field with prompt
- * 
- * @param buffer Buffer to store the description
- * @param size Size of the buffer
- * @return 0 on success, -1 on cancel
- */
-int read_task_description(char *buffer, size_t size) {
-    if (buffer == NULL || size == 0) return -1;
-    
-    int height, width;
-    getmaxyx(stdscr, height, width);
-    
-    /* Clear input buffer */
-    buffer[0] = '\0';
-    
-    /* Create input prompt */
-    int prompt_y = height - 2;
-    int prompt_x = 0;
-    
-    /* Show prompt */
-    mvprintw(prompt_y, prompt_x, "Description: ");
-    clrtoeol();
-    refresh();
-    
-    /* Move cursor to input position */
-    move(prompt_y, prompt_x + 13);
-    
-    /* Read input with bounds checking */
-    echo();
-    int ch;
-    size_t pos = 0;
-    
-    while ((ch = getch()) != '\n' && ch != KEY_ENTER) {
-        if (ch == 27) {  /* Escape to cancel */
-            buffer[0] = '\0';
-            noecho();
-            return -1;
-        }
-        if (ch == KEY_BACKSPACE || ch == 127) {  /* Backspace */
-            if (pos > 0) {
-                pos--;
-                buffer[pos] = '\0';
-                delch();
-            }
-        } else if (ch >= 32 && ch <= 126 && pos < size - 1) {
-            buffer[pos++] = (char)ch;
-            buffer[pos] = '\0';
-        }
-    }
-    
-    noecho();
-    
-    /* Clear the input line */
-    mvprintw(prompt_y, prompt_x, "%*s", width, " ");
-    
-    return (buffer[0] == '\0') ? -1 : 0;
-}
-
-/**
- * Enter Insert mode - allows text editing
- * MOD-03: User can enter Insert mode to edit task title
- */
-void enter_insert_mode(Board *board) {
-    if (board == NULL) return;
-    board->app_mode = MODE_INSERT;
-}
-
-/**
- * Exit Insert mode - returns to Normal mode for navigation
- * MOD-04: User can exit Insert mode back to Normal mode (Esc)
- */
-void exit_insert_mode(Board *board) {
-    if (board == NULL) return;
-    board->app_mode = MODE_NORMAL;
-}
-
-/**
- * Enter Checklist mode - allows navigating checklist items
- * Activated when user presses 'c' in detailed view
- */
-void enter_checklist_mode(Board *board) {
-    if (board == NULL) return;
-    board->app_mode = MODE_CHECKLIST;
-    board->checklist_index = 0;
-}
-
-/**
- * Exit Checklist mode - returns to Normal mode
- */
-void exit_checklist_mode(Board *board) {
-    if (board == NULL) return;
-    board->app_mode = MODE_NORMAL;
-    board->checklist_index = 0;
-}
-
 /**
  * Read checklist item text from user
  */
@@ -311,72 +213,56 @@ int read_checklist_item(char *buffer, size_t size) {
 }
 
 /**
- * Handle terminal resize event using soft resize
- * Per D-10, D-11: uses resizeterm() not full reinitialization
+ * Handle terminal resize event.
+ *
+ * By the time KEY_RESIZE is delivered, ncurses has already updated LINES /
+ * COLS via SIGWINCH. We just need to wipe the curscr/stdscr backing buffers
+ * so cells from the *old* geometry don't bleed through, and force a full
+ * repaint on the next event-loop iteration. The loop's call to render_board()
+ * will pick up the new dimensions via getmaxyx().
+ *
+ * Calling endwin() + refresh() is the canonical "the terminal changed under
+ * us, re-enter cleanly" pattern; it also fixes cases where the underlying
+ * terminal was resized while we weren't actively reading input.
  */
 void handle_resize(Board *board) {
-    if (board == NULL) return;
-    
-    /* Get new terminal dimensions */
-    int new_lines = LINES;
-    int new_cols = COLS;
-    
-    /* Use soft resize - resizeterm updates without full reinit */
-    resizeterm(new_lines, new_cols);
-    
-    /* Recalculate all window positions */
-    renderer_calculate_layout(new_lines, new_cols);
-    
-    /* Redraw everything */
-    renderer_redraw_all();
+    (void)board;
+    endwin();
+    refresh();
+    clear();
 }
 
 /**
- * Clamp the scroll offset for the current column so that sel->task_index
- * remains visible on screen.
- *
- * visible_height = height - 5 because render_column starts tasks at task_y=3
- * and stops before max_y-1 (= height-2), giving (height-2) - 3 = height-5
- * visible rows.  Keeping this comment here avoids re-deriving the geometry.
+ * Clamp the scroll offset for the current column so sel->task_index remains
+ * visible. Geometry must mirror render_column:
+ *   - bottom chrome (hint+status) = 2 rows
+ *   - column bottom border        = 1 row
+ *   - column header (title+rule)  = 2 rows
+ *   - blank gap below header      = 1 row
+ *   - each compact card           = 3 rows + 1 gap = 4 rows
+ * So available card rows = height - 2 - 1 - 2 - 1 = height - 6, and the
+ * number of compact cards that fit is (rows + 1) / 4 (the trailing gap of
+ * the last card isn't required).
  */
 static void clamp_scroll(Selection *sel) {
     int height, width;
     getmaxyx(stdscr, height, width);
-    (void)width;  /* unused but getmaxyx requires both */
-    int visible_height = height - 5; /* matches render_column: task_y=3, max_y=height-2, stop < max_y-1 */
-    if (visible_height < 1) visible_height = 1;
+    (void)width;
+    int card_rows = height - 6;
+    int visible_cards = (card_rows + 1) / 4;
+    if (visible_cards < 1) visible_cards = 1;
     int col_i = sel->column_index;
     int offset = get_scroll_offset(col_i);
     if (sel->task_index < offset) {
         set_scroll_offset(col_i, sel->task_index);
-    } else if (sel->task_index >= offset + visible_height) {
-        set_scroll_offset(col_i, sel->task_index - visible_height + 1);
+    } else if (sel->task_index >= offset + visible_cards) {
+        set_scroll_offset(col_i, sel->task_index - visible_cards + 1);
     }
 }
 
 int handle_input(Board *board, int key, Selection *selection) {
     if (board == NULL || selection == NULL) return 0;
-    
-    /* Check current mode and route accordingly */
-    if (board->app_mode == MODE_INSERT) {
-        /* Insert mode: Escape returns to Normal mode */
-        if (key == 27) {  /* Escape */
-            exit_insert_mode(board);
-            return 0;
-        }
-        /* In Insert mode, Enter returns to Normal mode */
-        if (key == '\n' || key == KEY_ENTER) {
-            exit_insert_mode(board);
-            return 0;
-        }
-        /* Arrow keys could move cursor in text editing mode */
-        if (key == KEY_UP || key == KEY_DOWN || key == KEY_LEFT || key == KEY_RIGHT) {
-            return 0;
-        }
-        /* Pass through other keys for potential text input */
-        return 0;
-    }
-    
+
     /* MODE_CARD_POPUP: centered overlay — handles title/description/checklist editing */
     if (board->app_mode == MODE_CARD_POPUP) {
         /* Get the selected task */
@@ -388,21 +274,43 @@ int handle_input(Board *board, int key, Selection *selection) {
 
         int checklist_count_val = checklist_count(task);
 
-        if (key == 27) { /* Esc: save and close */
+        if (key == 27 && !checklist_editing) { /* Esc: save and close popup */
+            /* If the user closes a card with no title, no description, and
+             * no checklist items, treat it as a cancel: delete the card.
+             * This makes 'o' on an empty column safe — press 'o' by mistake,
+             * Esc, no garbage card is left behind. Cards that were already
+             * non-empty before editing won't trigger this because the user
+             * would have to backspace away every field to land here. */
+            int is_empty = (task->title[0] == '\0' &&
+                            task->description[0] == '\0' &&
+                            task->checklist == NULL);
+            if (is_empty) {
+                task_delete(&col->tasks, task->id);
+                col->task_count--;
+                /* Clamp selection back to a valid card (or 0 if column is
+                 * now empty). */
+                if (selection->task_index >= col->task_count)
+                    selection->task_index = col->task_count - 1;
+                if (selection->task_index < 0)
+                    selection->task_index = 0;
+            }
             if (board->filename[0] != '\0') board_save(board, board->filename);
             board->app_mode = MODE_NORMAL;
             popup_active_field = 0;
             board->checklist_index = 0;
+            checklist_editing = 0;
             return 0;
         }
 
-        if (key == '\t') { /* Tab: advance field */
+        if (key == '\t' && !checklist_editing) { /* Tab: advance field */
             popup_active_field = (popup_active_field + 1) % 3;
+            checklist_editing = 0;
             return 0;
         }
 
-        if (key == KEY_BTAB) { /* Shift+Tab: previous field */
+        if (key == KEY_BTAB && !checklist_editing) { /* Shift+Tab: prev field */
             popup_active_field = (popup_active_field + 2) % 3;
+            checklist_editing = 0;
             return 0;
         }
 
@@ -432,6 +340,27 @@ int handle_input(Board *board, int key, Selection *selection) {
         }
 
         if (popup_active_field == 2) { /* Checklist field */
+            /* ----- Inline edit mode: typing into the text of the current item ----- */
+            if (checklist_editing) {
+                ChecklistItem *item = checklist_at(task, board->checklist_index);
+                if (item == NULL) { checklist_editing = 0; return 0; }
+                if (key == 27 || key == '\n' || key == KEY_ENTER) {
+                    /* Esc / Enter: commit and go back to nav mode */
+                    checklist_editing = 0;
+                    if (board->filename[0] != '\0') board_save(board, board->filename);
+                    return 0;
+                }
+                size_t ilen = strlen(item->text);
+                if ((key == KEY_BACKSPACE || key == 127) && ilen > 0) {
+                    item->text[ilen - 1] = '\0';
+                } else if (key >= 32 && key <= 126 && ilen < sizeof(item->text) - 1) {
+                    item->text[ilen] = (char)key;
+                    item->text[ilen + 1] = '\0';
+                }
+                return 0;
+            }
+
+            /* ----- Navigation mode ----- */
             if (key == 'j' || key == KEY_DOWN) {
                 if (board->checklist_index < checklist_count_val - 1)
                     board->checklist_index++;
@@ -442,30 +371,62 @@ int handle_input(Board *board, int key, Selection *selection) {
                     board->checklist_index--;
                 return 0;
             }
-            if (key == ' ') { /* Toggle */
-                ChecklistItem *item = task->checklist;
-                int ii = board->checklist_index;
-                while (item != NULL && ii > 0) { item = item->next; ii--; }
+            if (key == ' ') { /* Toggle current item */
+                ChecklistItem *item = checklist_at(task, board->checklist_index);
                 if (item != NULL) {
                     checklist_item_toggle(item);
                     if (board->filename[0] != '\0') board_save(board, board->filename);
                 }
                 return 0;
             }
-            if (key == 'a') { /* Add checklist item via bottom-bar prompt */
-                char item_text[256] = {0};
-                if (read_checklist_item(item_text, sizeof(item_text)) == 0) {
-                    checklist_item_add(task, item_text);
-                    board->checklist_index = checklist_count(task) - 1;
+            /* 'o' — insert new empty item AFTER the current one (or at end if
+             * the list is empty), enter inline edit mode on it. Vim semantics. */
+            if (key == 'o') {
+                int new_idx = (checklist_count_val == 0) ? 0
+                                                         : board->checklist_index + 1;
+                if (checklist_insert_empty_at(task, new_idx) != NULL) {
+                    board->checklist_index = new_idx;
+                    checklist_editing = 1;
+                }
+                return 0;
+            }
+            /* 'O' — insert new empty item BEFORE the current one, enter edit. */
+            if (key == 'O') {
+                int new_idx = board->checklist_index;
+                if (checklist_count_val == 0) new_idx = 0;
+                if (checklist_insert_empty_at(task, new_idx) != NULL) {
+                    board->checklist_index = new_idx;
+                    checklist_editing = 1;
+                }
+                return 0;
+            }
+            /* 'J' — pull current item DOWN one slot (swap with next). */
+            if (key == 'J') {
+                ChecklistItem *cur  = checklist_at(task, board->checklist_index);
+                ChecklistItem *next = (cur != NULL) ? cur->next : NULL;
+                if (next != NULL) {
+                    checklist_swap_data(cur, next);
+                    board->checklist_index++;
                     if (board->filename[0] != '\0') board_save(board, board->filename);
+                }
+                return 0;
+            }
+            /* 'K' — pull current item UP one slot (swap with previous). */
+            if (key == 'K') {
+                if (board->checklist_index > 0) {
+                    ChecklistItem *prev = checklist_at(task, board->checklist_index - 1);
+                    ChecklistItem *cur  = (prev != NULL) ? prev->next : NULL;
+                    if (prev != NULL && cur != NULL) {
+                        checklist_swap_data(prev, cur);
+                        board->checklist_index--;
+                        if (board->filename[0] != '\0') board_save(board, board->filename);
+                    }
                 }
                 return 0;
             }
             if (key == 'd') { /* Delete current checklist item */
                 if (checklist_count_val > 0) {
-                    ChecklistItem *item = task->checklist;
-                    int ii = board->checklist_index;
-                    while (item != NULL && ii > 0) { item = item->next; ii--; }
+                    ChecklistItem *item = checklist_at(task, board->checklist_index);
                     if (item != NULL) {
                         checklist_item_delete(task, item);
                         if (board->checklist_index >= checklist_count_val - 1 && board->checklist_index > 0)
@@ -490,16 +451,16 @@ int handle_input(Board *board, int key, Selection *selection) {
 
     /* 'i' - open card popup (D-01) */
     if (key == 'i') {
-        /* Check if there's a selected task */
         Column *col = &board->columns[selection->column_index];
         if (col->task_count > 0) {
             board->app_mode = MODE_CARD_POPUP;
             popup_active_field = 0;
             board->checklist_index = 0;
+            checklist_editing = 0;
         }
         return 0;
     }
-    
+
     /* 'c' - open card popup focused on checklist field */
     if (key == 'c') {
         Column *col = &board->columns[selection->column_index];
@@ -507,10 +468,11 @@ int handle_input(Board *board, int key, Selection *selection) {
             board->app_mode = MODE_CARD_POPUP;
             popup_active_field = 2;
             board->checklist_index = 0;
+            checklist_editing = 0;
         }
         return 0;
     }
-    
+
     /* Enter key - open card popup (D-01) */
     if (key == KEY_ENTER || key == '\n') {
         Column *col = &board->columns[selection->column_index];
@@ -518,6 +480,7 @@ int handle_input(Board *board, int key, Selection *selection) {
             board->app_mode = MODE_CARD_POPUP;
             popup_active_field = 0;
             board->checklist_index = 0;
+            checklist_editing = 0;
         }
         return 0;
     }
@@ -537,70 +500,46 @@ int handle_input(Board *board, int key, Selection *selection) {
     Column *col = &board->columns[selection->column_index];
     int task_count = col->task_count;
     
-    /* Convert key to char for configurable keybindings */
+    /* Map configurable keybindings (from ~/.config/kanban-cli/config.json)
+     * onto the canonical action keys used by the switch below. */
     char key_char = (char)key;
-    
-    /* Check for configurable keybindings */
-    int is_configurable_key = 0;
-    
-    /* Map configurable keys to their actions */
-    if (key_char == key_create) {
-        key = 'o';  /* Remap to create action */
-        is_configurable_key = 1;
-    } else if (key_char == key_delete) {
-        key = 'd';  /* Remap to delete action */
-        is_configurable_key = 1;
-    } else if (key_char == key_up) {
-        key = 'k';  /* Remap to up action */
-        is_configurable_key = 1;
-    } else if (key_char == key_down) {
-        key = 'j';  /* Remap to down action */
-        is_configurable_key = 1;
-    } else if (key_char == key_left) {
-        key = 'h';  /* Remap to left action */
-        is_configurable_key = 1;
-    } else if (key_char == key_right) {
-        key = 'l';  /* Remap to right action */
-        is_configurable_key = 1;
-    }
+    if      (key_char == key_create) key = 'o';
+    else if (key_char == key_delete) key = 'd';
+    else if (key_char == key_up)     key = 'k';
+    else if (key_char == key_down)   key = 'j';
+    else if (key_char == key_left)   key = 'h';
+    else if (key_char == key_right)  key = 'l';
     
     switch (key) {
-        /* 'o' - create task below current position (D-05) */
-        case 'o': {
-            char title[256] = {0};
-            if (read_task_title(title, sizeof(title)) == 0) {
-                Task *new_task = task_create(title);
-                if (new_task != NULL) {
-                    /* Insert below current position */
-                    int insert_pos = selection->task_index + 1;
-                    task_insert_at(col, new_task, insert_pos);
-                    selection->task_index = insert_pos;
-                    
-                    /* Auto-save per D-14 and STO-03 */
-                    if (board->filename[0] != '\0') {
-                        board_save(board, board->filename);
-                    }
-                }
-            }
-            break;
-        }
-        
-        /* 'O' (Shift+o) - create task above current position (D-06) */
+        /* 'o' / 'O' - create a new card and immediately enter the popup
+         * focused on the title field. We deliberately do NOT use a bottom-bar
+         * prompt: that put text on the hint-strip row and made the typed
+         * title appear far away from the actual card. Editing in the popup
+         * keeps the user's eyes on the card they just made. */
+        case 'o':
         case 'O': {
-            char title[256] = {0};
-            if (read_task_title(title, sizeof(title)) == 0) {
-                Task *new_task = task_create(title);
-                if (new_task != NULL) {
-                    /* Insert above current position */
-                    int insert_pos = selection->task_index;
-                    task_insert_at(col, new_task, insert_pos);
-                    /* Selection stays at same visual position, but now points to new task */
-                    
-                    /* Auto-save per D-14 and STO-03 */
-                    if (board->filename[0] != '\0') {
-                        board_save(board, board->filename);
-                    }
+            Task *new_task = task_create("");
+            if (new_task != NULL) {
+                /* Compute the desired insert slot, then clamp to the column's
+                 * new size. The clamp matters when the column was empty:
+                 * task_index defaults to 0 and 'o' would otherwise compute
+                 * insert_pos=1, leaving the selection pointing past the only
+                 * card and rendering a blank popup. */
+                int insert_pos = (key == 'o') ? selection->task_index + 1
+                                              : selection->task_index;
+                task_insert_at(col, new_task, insert_pos);
+                if (insert_pos >= col->task_count) insert_pos = col->task_count - 1;
+                if (insert_pos < 0) insert_pos = 0;
+                selection->task_index = insert_pos;
+                clamp_scroll(selection);
+                if (board->filename[0] != '\0') {
+                    board_save(board, board->filename);
                 }
+                /* Hand off to the popup, focused on the title field. */
+                board->app_mode = MODE_CARD_POPUP;
+                popup_active_field = 0;
+                board->checklist_index = 0;
+                checklist_editing = 0;
             }
             break;
         }
@@ -865,6 +804,7 @@ void handle_mouse_event(Board *board, Selection *selection) {
             navigation_select_task_at(board, selection, event.y, event.x);
             board->app_mode = MODE_CARD_POPUP;
             popup_active_field = 0;
+            checklist_editing = 0;
         } else if (event.bstate & BUTTON1_PRESSED || 
                    event.bstate & BUTTON1_CLICKED) {
             /* Navigate to task at clicked position */
@@ -1004,50 +944,68 @@ static void refresh_board_list_cache(void) {
 }
 
 /**
+ * Persist `name` as the default board in the user's config file so the next
+ * launch reopens it instead of always falling back to "default". Best-effort:
+ * we don't surface errors here because the in-memory switch already happened
+ * and the user shouldn't be blocked.
+ */
+static void persist_active_board(const char *name) {
+    if (name == NULL || name[0] == '\0') return;
+    Config cfg;
+    config_load(&cfg);
+    strncpy(cfg.default_board, name, sizeof(cfg.default_board) - 1);
+    cfg.default_board[sizeof(cfg.default_board) - 1] = '\0';
+    config_save(&cfg);
+}
+
+/**
  * Switch to a board by name
  * Saves current board and loads new one
  */
 static void switch_to_board(Board *board, Selection *selection, const char *board_name) {
     if (board == NULL || board_name == NULL) return;
-    
+
     /* Save current board first */
     if (board->filename[0] != '\0') {
         board_save(board, board->filename);
     }
-    
+
     /* Get boards directory and build new path */
     char dir_path[512];
     if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
         return;
     }
-    
+
     char file_path[512];
     snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, board_name);
-    
+
     /* Check if board exists */
     if (!board_exists(board_name)) {
         return;
     }
-    
+
     /* Free current board tasks */
     board_free(board);
-    
+
     /* Reinitialize board */
     board_init(board);
-    
+
     /* Load new board */
     board_load(board, file_path);
-    
+
     /* Update current board name */
     strncpy(global_current_board_name, board_name, sizeof(global_current_board_name) - 1);
     global_current_board_name[sizeof(global_current_board_name) - 1] = '\0';
-    
+
     /* Reset selection */
     selection->column_index = 0;
     selection->task_index = 0;
-    
+
     /* Refresh cache */
     refresh_board_list_cache();
+
+    /* Persist this as the active board so the next launch reopens it. */
+    persist_active_board(board_name);
 }
 
 /**
@@ -1224,7 +1182,39 @@ int handle_colon_command(Board *board, Selection *selection) {
             switch_to_board(board, selection, selected_board);
             free(selected_board);
         }
+    } else if (strncmp(command, "brename ", 8) == 0) {
+        /* :brename <new_name> — rename the current board file on disk and
+         * point this in-memory Board at the new path so subsequent saves
+         * land in the right place. */
+        const char *new_name = command + 8;
+        while (*new_name == ' ') new_name++;
+        if (*new_name == '\0') {
+            snprintf(input_error, sizeof(input_error), "Usage: :brename <new_name>");
+        } else if (board_exists(new_name)) {
+            snprintf(input_error, sizeof(input_error),
+                     "Board \"%s\" already exists", new_name);
+        } else if (board_rename(global_current_board_name, new_name) != 0) {
+            snprintf(input_error, sizeof(input_error),
+                     "Could not rename to \"%s\"", new_name);
+        } else {
+            /* Update in-memory state to point at the new file. */
+            char dir_path[512];
+            if (get_boards_directory(dir_path, sizeof(dir_path)) == 0) {
+                snprintf(board->filename, sizeof(board->filename),
+                         "%s%s.md", dir_path, new_name);
+            }
+            strncpy(global_current_board_name, new_name,
+                    sizeof(global_current_board_name) - 1);
+            global_current_board_name[sizeof(global_current_board_name) - 1] = '\0';
+            refresh_board_list_cache();
+            /* Persist so the next launch reopens the renamed board, not
+             * the old (now-missing) name. */
+            persist_active_board(new_name);
+        }
+    } else if (command[0] != '\0') {
+        snprintf(input_error, sizeof(input_error),
+                 "Unknown command: :%s", command);
     }
-    
+
     return 0;
 }

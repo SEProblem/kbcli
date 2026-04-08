@@ -102,40 +102,34 @@ static void trim_trailing(char *str) {
  */
 static int parse_json_string(const char *json, const char *key, char *out, size_t out_size) {
     if (json == NULL || key == NULL || out == NULL || out_size == 0) return -1;
-    
-    /* Build search pattern: "key":" */
+
+    /* Build the search pattern with the value's opening quote included
+     * (`"key":"` or `"key": "`). The key_pos + strlen(search) trick below
+     * lands the cursor on the first char of the value — we cannot use
+     * strchr(key_pos, '"') because that returns the OPENING quote of the
+     * key, not the value, and "value" ends up being the key name. (This
+     * was a long-standing latent bug; nobody noticed because for years
+     * the config file was never written and the defaults branch ran.) */
     char search[128];
     snprintf(search, sizeof(search), "\"%s\":\"", key);
-    
     const char *key_pos = strstr(json, search);
     if (key_pos == NULL) {
-        /* Try without colon: "key": "value" */
         snprintf(search, sizeof(search), "\"%s\": \"", key);
         key_pos = strstr(json, search);
     }
-    
     if (key_pos == NULL) return -1;
-    
-    /* Find the start of value */
-    const char *value_start = strchr(key_pos, '"');
-    if (value_start == NULL) return -1;
-    value_start++;  /* Skip opening quote */
-    
-    /* Find closing quote */
+
+    const char *value_start = key_pos + strlen(search);
     const char *value_end = strchr(value_start, '"');
-    if (value_end == NULL || value_end <= value_start) return -1;
-    
-    /* Copy value with bounds checking */
-    size_t value_len = value_end - value_start;
-    if (value_len > out_size - 1) {
-        value_len = out_size - 1;
-    }
-    
+    if (value_end == NULL || value_end < value_start) return -1;
+
+    size_t value_len = (size_t)(value_end - value_start);
+    if (value_len > out_size - 1) value_len = out_size - 1;
+
     memcpy(out, value_start, value_len);
     out[value_len] = '\0';
-    
+
     trim_trailing(out);
-    
     return 0;
 }
 

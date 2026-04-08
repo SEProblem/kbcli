@@ -15,15 +15,11 @@
 #define MAX_DESC_LEN 500
 
 /**
- * Mode enumeration for vim-style modal editing
- * MOD-01, MOD-02 per requirements
+ * Mode enumeration for vim-style modal editing.
+ * Only the modes actually used by the event loop remain.
  */
 typedef enum {
     MODE_NORMAL = 0,
-    MODE_INSERT,
-    MODE_DESCRIPTION_VIEW,
-    MODE_DESCRIPTION_EDIT,
-    MODE_CHECKLIST,
     MODE_HELP,
     MODE_CARD_POPUP
 } AppMode;
@@ -70,7 +66,7 @@ typedef struct Board {
     time_t last_modified;  /* For change detection */
     AppMode app_mode;      /* Current mode (Normal/Insert) per MOD-01, MOD-02 */
     int detailed_view;     /* Toggle between compact (0) and detailed (1) view */
-    int checklist_index;   /* Current position in checklist when in MODE_CHECKLIST */
+    int checklist_index;   /* Current position in checklist within MODE_CARD_POPUP */
 } Board;
 
 /* Column names for default 3-column layout */

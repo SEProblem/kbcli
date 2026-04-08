@@ -115,6 +115,15 @@ int board_create(const char *name);
 int board_delete(const char *name);
 
 /**
+ * Rename a board file from old_name.md to new_name.md.
+ *
+ * @param old_name Current board name (without .md extension)
+ * @param new_name Desired board name (without .md extension)
+ * @return 0 on success, -1 on error (missing source, target exists, etc.)
+ */
+int board_rename(const char *old_name, const char *new_name);
+
+/**
  * Check if a board file exists
  * 
  * @param name Board name (without .md extension)

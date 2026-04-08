@@ -40,24 +40,30 @@ void render_board(Board *board, Selection *sel);
  * @param scroll_offset Number of tasks to skip (for scrolling)
  * @param detailed_view Whether to show detailed view with description/checklist
  */
-void render_column(Column *col, int start_x, int width, 
+void render_column(Column *col, int column_index, int start_x, int width,
                    int selected_col, int sel_task_index, int scroll_offset,
                    int detailed_view);
 
 /**
- * Render a single task
- * Displays "- [ ] title" or "- [x] title" format
- * Applies reverse video highlight if selected
- * In detailed_view mode, also shows description and checklist
- * 
+ * Render a single task as a bordered card.
+ * Returns the number of rows the card consumed (including its bottom border).
+ *
  * @param task Pointer to task to render
- * @param y Row position
- * @param x Column position
- * @param width Available width for task display
+ * @param y Row position (top border row)
+ * @param x Column position (left border col)
+ * @param width Total card width including borders
  * @param selected Whether this task is currently selected
- * @param detailed_view Whether to show detailed view
+ * @param detailed_view Whether to show description + checklist inside the card
+ * @param column_index 0=To Do, 1=In Progress, 2=Done (drives styling)
  */
-void render_task(Task *task, int y, int x, int width, int selected, int detailed_view);
+int render_task(Task *task, int y, int x, int width, int selected,
+                int detailed_view, int column_index);
+
+/**
+ * Initialize ncurses color pairs. Safe no-op if terminal lacks color support.
+ * Must be called after initscr().
+ */
+void renderer_init_colors(void);
 
 /**
  * Highlight the selected task using reverse video
@@ -103,16 +109,6 @@ void renderer_calculate_layout(int lines, int cols);
  * Clears screen and renders all columns and status bar
  */
 void renderer_redraw_all(void);
-
-/**
- * Render description popup overlay
- * Displays task title and description in centered overlay
- * Per D-01, D-02, D-03: popup for viewing/editing descriptions
- * 
- * @param board Pointer to the board
- * @param selection Pointer to current selection state
- */
-void render_description_popup(Board *board, Selection *selection);
 
 /**
  * Render a scrollable list of available boards

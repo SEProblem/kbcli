@@ -49,12 +49,18 @@ static Task* parse_task_line(const char *line) {
     
     if (*title_start == '\0') return NULL;
     
-    /* Create task */
+    /* Create task. task_create copies title_start verbatim, but the
+     * title_start string still contains the trailing newline from fgets.
+     * Strip trailing whitespace so the title is safe to render with
+     * mvprintw — embedded \n causes ncurses to wrap the cursor to the
+     * next row at column 0, producing visible artifacts inside popups
+     * and column cards. */
     Task *task = task_create(title_start);
     if (task != NULL) {
         task->completed = completed;
+        trim_trailing(task->title);
     }
-    
+
     return task;
 }
 
@@ -161,23 +167,32 @@ int parse_markdown(Board *board, const char *filepath) {
                 parse_task_description(last_task, line);
                 continue;
             }
-            
-            /* Check for checklist item line (only after a task exists) */
-            if (last_task != NULL && strncmp(line, "- [", 4) == 0) {
-                ChecklistItem *item = parse_checklist_line(line);
-                if (item != NULL) {
-                    /* Append to end of checklist list (preserves file order) */
-                    if (last_task->checklist == NULL) {
-                        last_task->checklist = item;
-                    } else {
-                        ChecklistItem *ctail = last_task->checklist;
-                        while (ctail->next != NULL) ctail = ctail->next;
-                        ctail->next = item;
+
+            /* Indented "- [" line is a checklist item belonging to last_task.
+             * We require leading whitespace so we can distinguish a checklist
+             * item from a sibling task (both use the "- [ ]" syntax). Also
+             * accept legacy non-indented checklist items written by older
+             * versions of this app, but ONLY when last_task already has at
+             * least one item — otherwise an unindented "- [" is always a new
+             * task. */
+            if (last_task != NULL && (line[0] == ' ' || line[0] == '\t')) {
+                const char *p = line;
+                while (*p == ' ' || *p == '\t') p++;
+                if (strncmp(p, "- [", 3) == 0) {
+                    ChecklistItem *item = parse_checklist_line(p);
+                    if (item != NULL) {
+                        if (last_task->checklist == NULL) {
+                            last_task->checklist = item;
+                        } else {
+                            ChecklistItem *ctail = last_task->checklist;
+                            while (ctail->next != NULL) ctail = ctail->next;
+                            ctail->next = item;
+                        }
+                        continue;
                     }
-                    continue;
                 }
             }
-            
+
             Task *task = parse_task_line(line);
             if (task != NULL) {
                 /* Append task to end of column list (preserves file order) */
@@ -246,13 +261,18 @@ int write_markdown(Board *board, const char *filepath) {
             if (task->description[0] != '\0') {
                 fprintf(fp, "Description: %s\n", task->description);
             }
-            /* Write checklist items if present */
+            /* Write checklist items INDENTED so the parser (and human readers)
+             * can distinguish them from sibling tasks. Without indentation
+             * the format is ambiguous: every "- [" line after a task would
+             * be either a checklist item OR a sibling task with no way to
+             * tell, and on reload the items round-tripped as standalone
+             * cards in the same column. */
             ChecklistItem *item = task->checklist;
             while (item != NULL) {
                 if (item->checked) {
-                    fprintf(fp, "- [x] %s\n", item->text);
+                    fprintf(fp, "  - [x] %s\n", item->text);
                 } else {
-                    fprintf(fp, "- [ ] %s\n", item->text);
+                    fprintf(fp, "  - [ ] %s\n", item->text);
                 }
                 item = item->next;
             }
@@ -583,7 +603,33 @@ int board_delete(const char *name) {
     if (unlink(file_path) != 0) {
         return -1;
     }
-    
+
+    return 0;
+}
+
+/**
+ * Rename a board file from old_name.md to new_name.md.
+ * Returns 0 on success, -1 on error (missing source, target already exists,
+ * or filesystem rename failure).
+ */
+int board_rename(const char *old_name, const char *new_name) {
+    if (old_name == NULL || old_name[0] == '\0') return -1;
+    if (new_name == NULL || new_name[0] == '\0') return -1;
+    if (strcmp(old_name, new_name) == 0) return 0;  /* no-op */
+
+    char dir_path[512];
+    if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) return -1;
+
+    char old_path[768];
+    char new_path[768];
+    snprintf(old_path, sizeof(old_path), "%s%s.md", dir_path, old_name);
+    snprintf(new_path, sizeof(new_path), "%s%s.md", dir_path, new_name);
+
+    struct stat st;
+    if (stat(old_path, &st) != 0) return -1;       /* source missing */
+    if (stat(new_path, &st) == 0) return -1;       /* target exists */
+
+    if (rename(old_path, new_path) != 0) return -1;
     return 0;
 }
 
@@ -595,22 +641,22 @@ int board_delete(const char *name) {
  */
 int board_exists(const char *name) {
     if (name == NULL || name[0] == '\0') return 0;
-    
+
     /* Get boards directory */
     char dir_path[512];
     if (get_boards_directory(dir_path, sizeof(dir_path)) != 0) {
         return 0;
     }
-    
+
     /* Build full file path */
     char file_path[512];
     snprintf(file_path, sizeof(file_path), "%s%s.md", dir_path, name);
-    
+
     /* Check if file exists */
     struct stat st;
     if (stat(file_path, &st) == 0) {
         return 1;
     }
-    
+
     return 0;
 }

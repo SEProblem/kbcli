@@ -31,6 +31,14 @@ int handle_input(Board *board, int key, Selection *selection);
 int card_popup_active_field(void);
 
 /**
+ * Whether the popup checklist field is currently in inline-edit mode
+ * (typing into a checklist item) vs. navigation mode (j/k/Space/etc).
+ * Renderer uses this to park the cursor at the end of the item's text
+ * instead of just at the start of its row.
+ */
+int card_popup_checklist_editing(void);
+
+/**
  * Wait for a key press and return it
  * Used for input mode
  * 
@@ -39,19 +47,9 @@ int card_popup_active_field(void);
 int wait_for_key(void);
 
 /**
- * Read task title from user input
- * Uses ncurses input field with prompt
- * 
- * @param buffer Buffer to store the title
- * @param size Size of the buffer
- * @return 0 on success, -1 on cancel
- */
-int read_task_title(char *buffer, size_t size);
-
-/**
  * Get the last input error message
  * Returns NULL if no error
- * 
+ *
  * @return Error message string or NULL
  */
 const char* input_get_error(void);
@@ -60,16 +58,6 @@ const char* input_get_error(void);
  * Clear any input error state
  */
 void input_clear_error(void);
-
-/**
- * Read task description from user input
- * Uses ncurses input field with prompt
- * 
- * @param buffer Buffer to store the description
- * @param size Size of the buffer
- * @return 0 on success, -1 on cancel
- */
-int read_task_description(char *buffer, size_t size);
 
 /**
  * Handle terminal resize event

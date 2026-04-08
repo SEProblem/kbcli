@@ -6,9 +6,12 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <ncurses.h>
 
 #include "kanban.h"
@@ -24,15 +27,23 @@ static Board global_board;
 /* Global selection state - tracks current task selection */
 static Selection current_selection = {0, 0};
 
+/* Restore the terminal cursor style we may have changed via DECSCUSR. */
+static void restore_cursor(void) {
+    fputs("\033[0 q", stdout);
+    fflush(stdout);
+}
+
 /* Signal handler for graceful exit */
 static void handle_signal(int sig) {
     endwin();
+    restore_cursor();
     exit(sig);
 }
 
 /* Cleanup function registered with atexit() */
 static void cleanup(void) {
     endwin();
+    restore_cursor();
 }
 
 /* Main event loop integrating renderer and input */
@@ -84,6 +95,11 @@ int main(int argc, char *argv[]) {
     
     /* Reduce escape key delay for vim feel */
     set_escdelay(25);
+
+    /* Hide the hardware cursor by default. The card popup re-enables it
+     * (curs_set(1)) and parks it on the active text field while editing,
+     * so the user can see exactly where their next keystroke will land. */
+    curs_set(0);
     
     /* Enable mouse support - NAV-05, NAV-06 per D-09 */
     mousemask(ALL_MOUSE_EVENTS, NULL);
@@ -91,16 +107,60 @@ int main(int argc, char *argv[]) {
     
     /* Initialize renderer state */
     renderer_init();
+    renderer_init_colors();
     
     /* Initialize board */
     board_init(&global_board);
     
-    /* Load or create board */
-    char filepath[512];
-    if (get_default_board_path(filepath, sizeof(filepath)) == 0) {
-        board_load(&global_board, filepath);
+    /* Load or create board. Use the config's default_board (persisted across
+     * launches by :b/:brename/:blist) so we reopen whatever the user last had
+     * open, not always "default". */
+    {
+        Config startup_cfg;
+        config_load(&startup_cfg);
+        const char *board_dir = config_get_board_directory(&startup_cfg);
+        const char *board_name = (startup_cfg.default_board[0] != '\0')
+                                 ? startup_cfg.default_board : "default";
+
+        char filepath[512];
+        if (board_dir != NULL && board_dir[0] != '\0') {
+            snprintf(filepath, sizeof(filepath), "%s%s.md", board_dir, board_name);
+        } else if (get_default_board_path(filepath, sizeof(filepath)) != 0) {
+            filepath[0] = '\0';
+        }
+
+        if (filepath[0] != '\0') {
+            board_load(&global_board, filepath);
+        }
+
+        /* Sync the in-memory current-board name so the status bar reflects
+         * what we actually loaded, not the hardcoded "default". */
+        extern char global_current_board_name[256];
+        strncpy(global_current_board_name, board_name,
+                sizeof(global_current_board_name) - 1);
+        global_current_board_name[sizeof(global_current_board_name) - 1] = '\0';
     }
-    
+
+    /* First-run welcome: open the help overlay automatically and drop a
+     * sentinel file so we never do it again. */
+    {
+        const char *home = getenv("HOME");
+        if (home != NULL) {
+            char dir[512];
+            char sentinel[600];
+            snprintf(dir, sizeof(dir), "%s/.config/kanban-cli", home);
+            snprintf(sentinel, sizeof(sentinel), "%s/.welcomed", dir);
+            struct stat st;
+            if (stat(sentinel, &st) != 0) {
+                /* Best-effort mkdir; ignore failure (config_load already ran) */
+                mkdir(dir, 0755);
+                FILE *f = fopen(sentinel, "w");
+                if (f) { fputs("1\n", f); fclose(f); }
+                global_board.app_mode = MODE_HELP;
+            }
+        }
+    }
+
     /* Enter event loop - handles all rendering and input */
     event_loop();
     
